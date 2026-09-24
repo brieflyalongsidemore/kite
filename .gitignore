@@ -1,0 +1,23 @@
+# Local data: your brain, runs, threads, settings and keys
+data/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+.obsidian/
+
+# Local tooling
+.claude/

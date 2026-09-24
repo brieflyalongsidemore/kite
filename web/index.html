@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kite</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 20 10 12 22 4 10Z' fill='black'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="#today" id="brand" aria-label="Kite">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 20 10 12 22 4 10Z" fill="currentColor"/><path d="M12 22c-1 1.5-2.5 1.2-3 0s-2-1.3-2.6 0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      kite
+    </a>
+    <nav class="tabs" aria-label="Views">
+      <button class="tab" data-view="today">Today</button>
+      <button class="tab" data-view="plan">Plan</button>
+      <button class="tab" data-view="threads">Threads</button>
+      <button class="tab" data-view="brain">Brain</button>
+    </nav>
+    <div class="right">
+      <span class="health" id="health" title=""></span>
+      <button class="btn quiet sm" data-view="settings">Settings</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- TODAY -->
+  <section class="view narrow" id="v-today">
+    <div class="hello">
+      <div>
+        <h1 id="hello">Hello.</h1>
+        <div class="direction" id="direction"></div>
+      </div>
+      <div class="streak" id="streak"></div>
+    </div>
+    <div id="today-body"></div>
+  </section>
+
+  <!-- PLAN -->
+  <section class="view" id="v-plan" hidden>
+    <div class="split">
+      <aside>
+        <h2>New plan</h2>
+        <div class="stack">
+          <input id="goal" placeholder="Your goal, e.g. 1,000 followers by launch day">
+          <button class="btn" id="runBtn" style="width:100%">Make a plan</button>
+          <p class="tiny dim" id="runHint">The writer proposes; Jev decides. Takes a few minutes.</p>
+        </div>
+        <h2 class="block">Past plans</h2>
+        <div class="list" id="runs"></div>
+      </aside>
+      <div id="run"></div>
+    </div>
+  </section>
+
+  <!-- THREADS -->
+  <section class="view" id="v-threads" hidden>
+    <div class="split">
+      <aside>
+        <h2>Threads</h2>
+        <div class="list" id="threadList"></div>
+        <p class="tiny dim" style="margin-top:12px">Start one from any plan item with “Work on it”.</p>
+      </aside>
+      <div id="thread"></div>
+    </div>
+  </section>
+
+  <!-- BRAIN -->
+  <section class="view" id="v-brain" hidden>
+    <div class="row" style="margin-bottom:14px">
+      <input id="brainSearch" class="grow" placeholder="Find a note…" aria-label="Find a note">
+      <button class="btn ghost sm" id="brainRefresh">Refresh</button>
+      <button class="btn sm" id="reflectBtn" title="Review everything and update your direction">Reflect</button>
+    </div>
+    <p class="tiny dim" id="brainStatus" style="margin:-6px 0 10px"></p>
+    <div class="brainwrap">
+      <canvas id="graph" aria-label="Brain map"></canvas>
+      <div class="notepanel">
+        <div class="row">
+          <div class="grow"><div class="tiny dim" id="noteFolder">Your brain</div><h3 id="noteTitle">Pick a note</h3></div>
+          <button class="btn quiet sm" id="noteMode" disabled>Edit</button>
+          <button class="btn quiet sm" id="noteDelete" disabled>Delete</button>
+        </div>
+        <div id="noteRead" class="md"><p class="dim">Click a note in the map. Filled dots are done or core notes, rings are still to do, faded ones were skipped, small ones are daily logs.</p></div>
+        <textarea id="noteText" hidden aria-label="Note"></textarea>
+        <div class="row" style="margin-top:10px"><span class="grow tiny dim" id="noteSaved"></span><button class="btn sm" id="noteSave" hidden>Save</button></div>
+        <div class="links" id="noteLinks"></div>
+        <div class="links" id="noteBacklinks"></div>
+        <details class="links" id="trashBox" hidden><summary>Recently deleted</summary><div id="trashList"></div></details>
+        <p class="tiny faint" style="margin:12px 0 0">Also opens in Obsidian: <span id="brainPath"></span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view narrow" id="v-settings" hidden>
+    <h1>Settings</h1>
+    <p class="dim">Saved on this machine in <span id="dataPath">data/</span>. Keys never leave it except to the provider you pick.</p>
+    <div id="settings"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@14.1.4/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

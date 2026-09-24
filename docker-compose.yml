@@ -1,0 +1,18 @@
+services:
+  kite:
+    build: .
+    image: kite:local
+    # Only reachable from this machine. Kite has no login; don't expose it publicly.
+    ports:
+      - "127.0.0.1:8788:8788"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/data
+      # Amazon Bedrock: share your AWS credentials read-only (uncomment and set AWS_PROFILE in .env)
+      # - ~/.aws:/home/kite/.aws:ro
+    extra_hosts:
+      # lets a "compatible" writer reach Ollama or LM Studio on the host at http://host.docker.internal:11434/v1
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

@@ -1,0 +1,30 @@
+[project]
+name = "kite"
+version = "0.1.0"
+description = "A local copilot for growing on social media: an LLM plans and writes, Jev decides."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic[bedrock]>=1.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+kite = "kite.__main__:main"
+
+[tool.setuptools]
+packages = ["kite"]
+
+[tool.ruff]
+line-length = 160
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["E501", "E731"]  # long prompt strings; small lambdas are fine
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
