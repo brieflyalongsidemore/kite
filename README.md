@@ -1,5 +1,7 @@
 <p align="center"><img src="docs/banner.png" alt="kite: grow on social, one good call at a time" width="100%"></p>
 
+<p align="center"><a href="https://open-kite.vercel.app">Website</a> · <a href="#quick-start">Quick start</a> · <a href="#providers">Providers</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
+
 # kite
 
 **A local copilot for growing on social media.** An LLM does the thinking and writing. [Jev](https://openrouter.ai/docs/guides/community/jev), TypeSafe's decision model, makes the calls: which kinds of posts to make, which ideas are worth it, which draft wins, which action comes first.

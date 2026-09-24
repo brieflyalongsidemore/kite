@@ -9,6 +9,10 @@ dependencies = [
     "anthropic[bedrock]>=1.8",
 ]
 
+[project.urls]
+Homepage = "https://open-kite.vercel.app"
+Repository = "https://github.com/brieflyalongsidemore/kite"
+
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
 
