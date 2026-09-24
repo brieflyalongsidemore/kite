@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kite</title>
+<meta name="description" content="A local copilot for growing on social media. An LLM writes; Jev, TypeSafe's decision model, makes the calls.">
+<meta property="og:title" content="Kite">
+<meta property="og:description" content="Grow on social, one good call at a time. Open source, runs on your machine.">
+<meta property="og:image" content="https://brieflyalongsidemore.github.io/kite/social-preview.png">
+<meta property="og:url" content="https://brieflyalongsidemore.github.io/kite/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 20 10 12 22 4 10Z' fill='black'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --fg: #0b0b0c; --dim: #6b6b70; --faint: #b3b3b8; --soft: #e7e7ea; --wash: #f5f5f7;
+  --ink: #050506; --paper: #f4f4f3; --paper-dim: #9d9da3;
+  --display: "Lexend", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: "Lexend", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --wrap: 1120px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0b0b0c; --fg: #f3f3f2; --dim: #9b9ba0; --faint: #55555a; --soft: #232326; --wash: #141416; }
+}
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0b0b0c; --fg: #f3f3f2; --dim: #9b9ba0; --faint: #55555a; --soft: #232326; --wash: #141416; }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 300 16px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+img { max-width: 100%; }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+::selection { background: var(--fg); color: var(--bg); }
+:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding-inline: 20px; }
+.mono { font-family: var(--mono); }
+
+/* ---------- hero (always ink, like the banner) ---------- */
+.hero { position: relative; background: var(--ink); color: var(--paper); overflow: hidden; isolation: isolate; }
+.hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
+.nav { display: flex; align-items: center; gap: 24px; padding-block: calc(18px + env(safe-area-inset-top, 0px)) 18px; }
+.mark { display: inline-flex; align-items: center; gap: 8px; font: 600 18px/1 var(--display); letter-spacing: -0.02em; text-decoration: none; }
+.mark svg { width: 20px; height: 20px; }
+.nav-links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; }
+.nav-links a { text-decoration: none; color: var(--paper-dim); transition: color .15s; }
+.nav-links a:hover { color: var(--paper); }
+.hero-grid { max-width: 700px; padding-block: 52px 96px; }
+.kicker { display: inline-flex; align-items: center; gap: 10px; font: 500 11.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--paper-dim); border: 1px solid #27272b; border-radius: 999px; padding: 7px 13px; }
+.kicker i { width: 6px; height: 6px; border-radius: 50%; background: var(--paper); }
+.headline { font: 600 clamp(54px, 7.6vw, 104px)/0.94 var(--display); letter-spacing: -0.052em; margin: 26px 0 0; text-wrap: balance; }
+.headline em { font-style: normal; position: relative; white-space: nowrap; }
+.headline em svg { position: absolute; left: 0; bottom: -0.1em; width: calc(100% - .28em); height: .2em; overflow: visible; }
+.headline em path { fill: none; stroke: var(--paper); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.1s .5s cubic-bezier(.6,0,.2,1) forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.sub { font: 300 clamp(18px, 2vw, 21px)/1.5 var(--display); color: #b9b9be; max-width: 40ch; margin: 26px 0 0; }
+.sub b { color: var(--paper); font-weight: 400; }
+.proof { margin: 26px 0 0; font: 400 12px/1.6 var(--mono); color: #75757b; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; align-items: center; }
+.pill { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 11px 20px; font-weight: 500; font-size: 15px; text-decoration: none; border: 1px solid var(--paper); background: var(--paper); color: var(--ink); transition: transform .12s; }
+.pill:hover { transform: translateY(-1px); }
+.pill svg { width: 16px; height: 16px; }
+.cmd { display: inline-flex; align-items: center; gap: 12px; border: 1px solid #2c2c30; border-radius: 999px; padding: 6px 6px 6px 18px; font: 400 14px var(--mono); color: #d8d8dc; background: rgba(255,255,255,.03); }
+.cmd b { color: #6f6f75; font-weight: 400; }
+.copy { border: 0; border-radius: 999px; padding: 6px 12px; font: 500 12px var(--mono); cursor: pointer; background: #1d1d20; color: var(--paper); letter-spacing: .02em; }
+.copy:hover { background: #2a2a2e; }
+
+/* ---------- sections ---------- */
+section.s { padding-block: 104px 0; }
+.eyebrow { font: 500 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .14em; color: var(--dim); margin: 0 0 18px; }
+h2 { font: 500 clamp(30px, 4.4vw, 48px)/1.08 var(--display); letter-spacing: -0.035em; margin: 0; text-wrap: balance; max-width: 18ch; }
+.intro { color: var(--dim); max-width: 58ch; margin: 18px 0 0; font-size: 17px; }
+
+/* engine: writer proposes / jev decides */
+.engine { margin-top: 44px; border: 1px solid var(--soft); border-radius: 18px; overflow: hidden; }
+.steps { display: flex; gap: 4px; padding: 10px; border-bottom: 1px solid var(--soft); flex-wrap: wrap; background: var(--wash); }
+.steps button { border: 0; background: none; padding: 7px 14px; border-radius: 999px; cursor: pointer; color: var(--dim); font-size: 14px; font-weight: 400; }
+.steps button:hover { color: var(--fg); }
+.steps button[aria-selected="true"] { background: var(--fg); color: var(--bg); }
+.engine-body { display: grid; grid-template-columns: 1fr; }
+.engine-q { padding: 22px 24px 4px; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+.engine-q strong { font: 500 19px/1.3 var(--display); letter-spacing: -0.015em; }
+.engine-q span { font: 400 12px var(--mono); color: var(--dim); }
+.cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 0 28px; padding: 12px 24px 8px; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .12em; color: var(--dim); }
+.rows { padding: 0 24px 22px; }
+.r { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 6px 28px; align-items: center; padding: 13px 0; border-top: 1px solid var(--soft); }
+.r:first-child { border-top: 0; }
+.r .t { font-size: 15px; line-height: 1.45; }
+.r .t small { display: block; color: var(--dim); font-size: 13px; margin-top: 2px; }
+.bar { display: flex; align-items: center; gap: 12px; }
+.track { flex: 1; height: 10px; border-radius: 3px; background: var(--wash); position: relative; overflow: hidden; }
+.fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--faint); transition: width .7s cubic-bezier(.2,.8,.2,1); }
+.r.top .fill { background: var(--fg); }
+.r.top .t { font-weight: 400; }
+.pct { font: 500 13px var(--mono); width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.pick { display: inline-block; font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; border: 1px solid var(--fg); border-radius: 999px; padding: 3px 7px; margin-left: 8px; vertical-align: 2px; }
+.engine-foot { padding: 14px 24px; border-top: 1px solid var(--soft); font: 400 12px var(--mono); color: var(--dim); display: flex; flex-wrap: wrap; gap: 6px 20px; }
+
+/* how it works */
+.how { margin-top: 48px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--fg); }
+.how li { list-style: none; padding: 22px 22px 0 0; }
+.how li + li { padding-left: 22px; border-left: 1px solid var(--soft); }
+.how .n { font: 500 12px var(--mono); color: var(--dim); }
+.how h3 { font: 500 20px/1.25 var(--display); letter-spacing: -0.02em; margin: 14px 0 8px; }
+.how p { margin: 0; color: var(--dim); font-size: 15px; }
+.how ol { padding: 0; margin: 0; display: contents; }
+
+/* today demo */
+.demo-grid { margin-top: 44px; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.app { border: 1px solid var(--soft); border-radius: 18px; padding: 26px; background: var(--bg); box-shadow: 0 1px 0 var(--soft), 0 24px 60px -32px rgba(0,0,0,.28); }
+.app-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.app h3 { font: 500 26px/1.15 var(--display); letter-spacing: -0.025em; margin: 0; }
+.app .dir { color: var(--dim); margin: 6px 0 0; font-size: 15px; max-width: 42ch; }
+.streak { display: flex; align-items: center; gap: 10px; font: 400 12px var(--mono); color: var(--dim); }
+.days { display: flex; gap: 4px; }
+.days i { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--faint); display: block; transition: background .3s, border-color .3s; }
+.days i.on { background: var(--fg); border-color: var(--fg); }
+.days i.today { outline: 1px solid var(--fg); outline-offset: 2px; }
+.label { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 10px; display: flex; justify-content: space-between; gap: 12px; }
+.focus { list-style: none; margin: 0; padding: 0; }
+.focus li { border-top: 1px solid var(--soft); }
+.focus li:first-child { border-top: 0; }
+.fi { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
+.check { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--fg); background: none; cursor: pointer; flex: none; display: grid; place-items: center; padding: 0; }
+.check svg { width: 12px; height: 12px; opacity: 0; }
+li.done .check { background: var(--fg); }
+li.done .check svg { opacity: 1; color: var(--bg); }
+li.done .ft { color: var(--dim); text-decoration: line-through; text-decoration-color: var(--faint); }
+.ft { flex: 1; font-size: 15px; line-height: 1.4; }
+.work { border: 0; background: none; color: var(--dim); font-size: 13px; cursor: pointer; white-space: nowrap; padding: 4px 0; }
+.work:hover { color: var(--fg); }
+.thread { margin: 0 0 14px 32px; padding: 14px 16px; background: var(--wash); border-radius: 12px; font-size: 14px; }
+.thread p { margin: 0 0 8px; color: var(--dim); }
+.thread ol { margin: 0; padding-left: 18px; }
+.thread li { border: 0; padding: 2px 0; }
+.post { border: 1px solid var(--fg); border-radius: 14px; padding: 18px 18px 14px; }
+.post p { margin: 0; font: 400 17px/1.45 var(--display); letter-spacing: -0.01em; min-height: 3em; }
+.post .meta { margin-top: 14px; font: 400 12px var(--mono); color: var(--dim); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.post .meta b { color: var(--fg); font-weight: 500; }
+.pager { display: inline-flex; align-items: center; gap: 4px; }
+.pager button { border: 1px solid var(--soft); background: none; border-radius: 999px; width: 26px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1; color: var(--fg); }
+.pager button:hover { border-color: var(--fg); }
+
+.scorecard { border: 1px solid var(--soft); border-radius: 18px; padding: 22px 22px 18px; }
+.scorecard h4 { margin: 0; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .12em; color: var(--dim); }
+.big { display: flex; align-items: baseline; gap: 10px; margin: 12px 0 4px; }
+.big strong { font: 500 56px/1 var(--display); letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.big span { font: 400 12px var(--mono); color: var(--dim); }
+.metrics { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 9px; }
+.metrics li { display: grid; grid-template-columns: 96px minmax(0, 1fr) 30px; gap: 10px; align-items: center; font: 400 12px var(--mono); }
+.metrics li span:first-child { color: var(--dim); }
+.metrics .track { height: 6px; }
+.metrics .fill { background: var(--fg); }
+.metrics li.inv .fill { background: var(--faint); }
+.metrics li b { font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+.note { font: 400 11px var(--mono); color: var(--dim); margin: 14px 0 0; }
+.example { font: 400 12px var(--mono); color: var(--dim); margin: 14px 0 0; }
+
+/* brain */
+.brain { margin-top: 44px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 36px; align-items: center; }
+.brain dl { margin: 0; display: grid; gap: 18px; }
+.brain dt { font: 500 17px/1.3 var(--display); letter-spacing: -0.015em; }
+.brain dd { margin: 4px 0 0; color: var(--dim); font-size: 15px; }
+.graph { border: 1px solid var(--soft); border-radius: 18px; background: var(--wash); overflow: hidden; }
+.graph svg { display: block; width: 100%; height: auto; }
+.graph line { stroke: var(--faint); stroke-width: 1; transition: stroke .2s; }
+.graph line.hot { stroke: var(--fg); }
+.graph circle { fill: var(--bg); stroke: var(--fg); stroke-width: 1.5; transition: fill .2s; }
+.graph g.node { cursor: default; }
+.graph g.node.core circle { fill: var(--fg); }
+.graph g.node.hot circle { fill: var(--fg); }
+.graph text { fill: var(--dim); font: 400 11px var(--mono); transition: fill .2s; }
+.graph g.node.hot text, .graph g.node.core text { fill: var(--fg); }
+.graph-cap { padding: 10px 16px; border-top: 1px solid var(--soft); font: 400 12px var(--mono); color: var(--dim); }
+
+/* providers */
+.prov { margin-top: 44px; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 28px; }
+.table { border: 1px solid var(--soft); border-radius: 18px; overflow-x: auto; }
+.table table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 460px; }
+.table caption { text-align: left; padding: 16px 20px 6px; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .12em; color: var(--dim); }
+.table th, .table td { text-align: left; padding: 11px 20px; border-top: 1px solid var(--soft); vertical-align: top; }
+.table th { font-weight: 400; white-space: nowrap; }
+.table td { color: var(--dim); }
+.table code { font: 400 12.5px var(--mono); color: var(--fg); }
+.fallback { margin: 12px 0 0; color: var(--dim); font-size: 14px; }
+
+
+/* start */
+.start { margin-top: 44px; border-radius: 18px; background: var(--ink); color: var(--paper); overflow: hidden; }
+.start-tabs { display: flex; gap: 4px; padding: 10px; border-bottom: 1px solid #1f1f22; }
+.start-tabs button { border: 0; background: none; color: var(--paper-dim); padding: 7px 14px; border-radius: 999px; cursor: pointer; font-size: 14px; }
+.start-tabs button[aria-selected="true"] { background: var(--paper); color: var(--ink); }
+.start-tabs .copy { margin-left: auto; }
+.start pre { margin: 0; padding: 22px 24px 26px; overflow-x: auto; font: 400 14px/1.9 var(--mono); color: #e6e6e9; }
+.start pre .c { color: #6d6d73; }
+.start-note { margin: 16px 0 0; color: var(--dim); font-size: 15px; max-width: 62ch; }
+
+footer { margin-top: 120px; border-top: 1px solid var(--soft); }
+.foot { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; padding-block: 28px calc(36px + env(safe-area-inset-bottom, 0px)); font-size: 14px; color: var(--dim); }
+.foot .mark { color: var(--fg); font-size: 16px; }
+.foot a { text-decoration: none; }
+.foot a:hover { color: var(--fg); }
+.foot .sp { flex: 1; }
+
+@media (max-width: 900px) {
+  .demo-grid, .brain, .prov { grid-template-columns: 1fr; }
+  .how { grid-template-columns: 1fr 1fr; }
+  .how li:nth-child(3) { padding-left: 0; border-left: 0; }
+  .how li { padding-bottom: 22px; }
+}
+@media (max-width: 640px) {
+  .kicker { font-size: 10.5px; letter-spacing: .1em; }
+  .nav-links a:not(.gh) { display: none; }
+  .hero-grid { padding-block: 36px 64px; }
+  section.s { padding-block: 80px 0; }
+  .how { grid-template-columns: 1fr; }
+  .how li + li { padding-left: 0; border-left: 0; border-top: 1px solid var(--soft); }
+  .how li { padding: 20px 0; }
+  .cols { display: none; }
+  .r { grid-template-columns: 1fr; }
+  .engine-q, .rows { padding-inline: 18px; }
+  .app { padding: 20px; }
+  .thread { margin-left: 0; }
+  .cmd { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .fill, .days i, .pill { transition: none; }
+  .headline em path { animation: none; stroke-dashoffset: 0; }
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <canvas id="wind" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <nav class="nav" aria-label="Site">
+      <a class="mark" href="#top" id="top">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 20 10 12 22 4 10Z" fill="currentColor"/></svg>kite
+      </a>
+      <div class="nav-links">
+        <a href="#engine">How it decides</a>
+        <a href="#today">A day with Kite</a>
+        <a class="gh" href="https://github.com/brieflyalongsidemore/kite">GitHub</a>
+      </div>
+    </nav>
+    <div class="hero-grid">
+    <div class="hero-copy">
+      <span class="kicker"><i></i>Open source · runs on your machine</span>
+      <h1 class="headline">Stop guessing what to <em>post.<svg viewBox="0 0 200 20" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M3 13 C 38 3, 66 19, 104 11 S 168 3, 197 12"/></svg></em></h1>
+      <p class="sub">Kite drafts posts in your voice. <b>Jev, a decision model, picks the ones worth posting.</b> Grow one good call at a time.</p>
+      <div class="actions">
+        <a class="pill" href="https://github.com/brieflyalongsidemore/kite">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          Get it on GitHub
+        </a>
+        <span class="cmd"><span><b>$</b> docker compose up</span><button class="copy" type="button" data-copy="git clone https://github.com/brieflyalongsidemore/kite &amp;&amp; cd kite &amp;&amp; cp .env.example .env &amp;&amp; docker compose up -d">Copy</button></span>
+      </div>
+      <p class="proof">Write with Claude, GPT, Gemini, Llama or a local model. Judge with Jev.</p>
+    </div>
+
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ENGINE -->
+  <section class="s" id="engine" aria-labelledby="engine-h">
+    <div class="wrap">
+      <p class="eyebrow">How it decides</p>
+      <h2 id="engine-h">The writer proposes. Jev decides.</h2>
+      <p class="intro">Most AI writing tools hand you whatever the model says first. Kite makes the writer come up with options, then asks Jev to judge them with real probabilities. You see every call and why it went that way.</p>
+
+      <div class="engine">
+        <div class="steps" role="tablist" aria-label="Planning steps">
+          <button role="tab" id="st-mix" aria-selected="true" data-step="mix">Mix</button>
+          <button role="tab" id="st-ideas" aria-selected="false" data-step="ideas">Ideas</button>
+          <button role="tab" id="st-posts" aria-selected="false" data-step="posts">Posts</button>
+          <button role="tab" id="st-actions" aria-selected="false" data-step="actions">Actions</button>
+        </div>
+        <div class="engine-body" role="tabpanel" id="engine-panel" aria-live="polite">
+          <div class="engine-q"><strong id="eq"></strong><span id="eqt"></span></div>
+          <div class="cols" aria-hidden="true"><span>Writer proposes</span><span>Jev decides</span></div>
+          <div class="rows" id="erows"></div>
+        </div>
+        <div class="engine-foot"><span>Example plan for an AI-tools account</span><span id="efoot"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW -->
+  <section class="s" aria-labelledby="how-h">
+    <div class="wrap">
+      <p class="eyebrow">From profile to posted</p>
+      <h2 id="how-h">Four steps, and it remembers each one.</h2>
+      <ol class="how">
+        <li><span class="n">1 · Learn</span><h3>It learns your voice</h3><p>Paste your profile page, drop in screenshots or upload an export like X's <span class="mono">tweets.js</span>. No paid API needed. You get an editable profile of your niche, audience and tone.</p></li>
+        <li><span class="n">2 · Plan</span><h3>It makes a plan</h3><p>Research from Reddit, Hacker News, Bluesky, Mastodon and Google Trends, then a mix of posts, ideas, drafts and growth moves, each one judged by Jev.</p></li>
+        <li><span class="n">3 · Work</span><h3>It helps you do it</h3><p>Every action has <em>Work on it</em>, which opens a thread with a checklist and drafts. Jev picks the best ones. You post them yourself.</p></li>
+        <li><span class="n">4 · Remember</span><h3>It keeps a brain</h3><p>What you did, skipped and learned goes into a folder of linked Markdown notes. <em>Reflect</em> updates where you're really heading.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- TODAY -->
+  <section class="s" id="today" aria-labelledby="today-h">
+    <div class="wrap">
+      <p class="eyebrow">A day with Kite</p>
+      <h2 id="today-h">Open it with your coffee. Three things, then post.</h2>
+      <p class="intro">The Today screen is the whole daily habit: a short focus list and posts that are ready to go. Try it: tick things off, open a thread, flip through the drafts.</p>
+
+      <div class="demo-grid">
+        <div class="app" aria-label="Example of the Today screen">
+          <div class="app-top">
+            <div>
+              <h3>Good morning, @you.</h3>
+              <p class="dir">Building an audience in AI coding tools by replying into live threads.</p>
+            </div>
+            <div class="streak"><div class="days" id="days" aria-hidden="true"></div><span id="streakTxt">5-day streak</span></div>
+          </div>
+
+          <div class="label"><span id="focusLbl">Focus · 1/3 done</span></div>
+          <ul class="focus" id="focus"></ul>
+
+          <div class="label"><span>Ready to post</span>
+            <span class="pager"><button type="button" id="prev" aria-label="Previous draft">←</button><span id="pg">1/3</span><button type="button" id="next" aria-label="Next draft">→</button></span>
+          </div>
+          <div class="post"><p id="draft"></p><div class="meta" id="dmeta"></div></div>
+        </div>
+
+        <aside class="scorecard" aria-label="Jev scorecard for this draft">
+          <h4>Jev scorecard · this draft</h4>
+          <div class="big"><strong id="jev">74</strong><span>JEV score</span></div>
+          <ul class="metrics" id="metrics"></ul>
+          <p class="note">Bait and rehash are penalties. Rehash compares the draft with your past posts, so Kite doesn't repeat you.</p>
+          <p class="example">Example data. Your screen fills with your own profile.</p>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- BRAIN -->
+  <section class="s" aria-labelledby="brain-h">
+    <div class="wrap">
+      <p class="eyebrow">The brain</p>
+      <h2 id="brain-h">It knows what you did, and what you didn't.</h2>
+      <div class="brain">
+        <dl>
+          <div><dt>Plain Markdown, linked like a vault</dt><dd>Every plan, decision, checklist tick and post becomes a note. Open the folder in Obsidian if you like.</dd></div>
+          <div><dt>Kept current by the writer</dt><dd>Kite uses Anthropic's memory tool, so the writer reads and updates its notes as it works.</dd></div>
+          <div><dt>Yours to prune</dt><dd>Delete a note and it goes to the brain's trash, where you can restore it.</dd></div>
+        </dl>
+        <figure class="graph" style="margin:0">
+          <svg id="graph" viewBox="0 0 640 380" role="img" aria-label="Example brain graph: Direction linked to Profile, plans, posts, skipped actions and lessons"></svg>
+          <figcaption class="graph-cap">Example brain · hover a note to see its links</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROVIDERS -->
+  <section class="s" aria-labelledby="prov-h">
+    <div class="wrap">
+      <p class="eyebrow">Bring your own models</p>
+      <h2 id="prov-h">Any writer. Jev as the judge.</h2>
+      <p class="intro">Pick a writer in Settings or in <span class="mono">.env</span>. Each one has a backup model: if the main one stays overloaded, Kite waits 15, 30 and 60 seconds, then carries on with the backup from where it stopped.</p>
+      <div class="prov">
+        <div class="table">
+          <table>
+            <caption>Writer · researches, plans and writes</caption>
+            <tbody>
+              <tr><th>Anthropic API</th><td><code>ANTHROPIC_API_KEY</code> · Claude Opus 5 by default, with thinking and the memory tool</td></tr>
+              <tr><th>Amazon Bedrock</th><td>Your AWS credentials: env vars, <code>~/.aws</code> or SSO</td></tr>
+              <tr><th>OpenRouter</th><td><code>OPENROUTER_API_KEY</code> · Claude, GPT, Gemini, Llama and more</td></tr>
+              <tr><th>OpenAI</th><td><code>OPENAI_API_KEY</code> · GPT-5 by default</td></tr>
+              <tr><th>OpenAI-compatible</th><td>Ollama, LM Studio or vLLM via <code>KITE_WRITER_BASE_URL</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="table">
+            <table style="min-width:0">
+              <caption>Judge · Jev</caption>
+              <tbody>
+                <tr><th>OpenRouter</th><td><code>~typesafe/jev-latest</code></td></tr>
+                <tr><th>TypeSafe API</th><td><code>jev-latest</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="fallback">No Jev key yet? Kite still runs, with a rough heuristic standing in for the scores.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- START -->
+  <section class="s" aria-labelledby="start-h">
+    <div class="wrap">
+      <p class="eyebrow">Get started</p>
+      <h2 id="start-h">Up in a minute.</h2>
+      <div class="start">
+        <div class="start-tabs" role="tablist" aria-label="Install method">
+          <button role="tab" id="t-docker" aria-selected="true" data-t="docker">Docker</button>
+          <button role="tab" id="t-pip" aria-selected="false" data-t="pip">pip</button>
+          <button class="copy" type="button" id="copyStart">Copy</button>
+        </div>
+        <pre id="startCode"></pre>
+      </div>
+      <p class="start-note">Add at least one writer key and a Jev key to <span class="mono">.env</span>, or set them later under Settings in the app. Then open <span class="mono">http://localhost:8788</span>.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span class="mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 20 10 12 22 4 10Z" fill="currentColor"/></svg>kite</span>
+    <span>MIT licensed</span>
+    <span class="sp"></span>
+    <a href="https://openrouter.ai/docs/guides/community/jev">About Jev</a>
+    <a href="https://github.com/brieflyalongsidemore/kite/blob/main/CONTRIBUTING.md">Contribute</a>
+    <a href="https://github.com/brieflyalongsidemore/kite">GitHub</a>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- copy buttons ---------- */
+  async function copy(btn, text) {
+    try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; }
+    catch { btn.textContent = "Select it"; }
+    setTimeout(() => { btn.textContent = "Copy"; }, 1600);
+  }
+  document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => copy(b, b.dataset.copy)));
+
+  /* ---------- hero wind ---------- */
+  const cv = document.getElementById("wind"), ctx = cv.getContext("2d");
+  let W = 0, H = 0, dpr = 1, t = 0, running = true, px = null, py = null, kx = 0, ky = 0;
+  const strands = [
+    { y: .30, a: 46, f: .0042, s: .22, p: 0,   a2: 18, f2: .011, w: 1.2, o: .55 },
+    { y: .40, a: 38, f: .0036, s: .18, p: 1.7, a2: 12, f2: .009, w: .8,  o: .30 },
+    { y: .62, a: 52, f: .0031, s: .15, p: 3.1, a2: 16, f2: .012, w: 1.1, o: .45 },
+    { y: .74, a: 30, f: .0047, s: .26, p: 4.4, a2: 10, f2: .008, w: .7,  o: .22 },
+    { y: .86, a: 40, f: .0028, s: .12, p: 5.2, a2: 14, f2: .010, w: .9,  o: .28 },
+  ];
+  function size() {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function kiteBase() {
+    return W < 700 ? { x: W * .86, y: 70, s: .55 } : { x: W * .76, y: H * .32, s: 1 };
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (const s of strands) {
+      const g = ctx.createLinearGradient(0, 0, W, 0);
+      g.addColorStop(0, "rgba(255,255,255,0)");
+      g.addColorStop(.35, `rgba(255,255,255,${s.o})`);
+      g.addColorStop(.75, `rgba(255,255,255,${s.o * .8})`);
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.strokeStyle = g; ctx.lineWidth = s.w; ctx.beginPath();
+      for (let x = -10; x <= W + 10; x += 8) {
+        const y = s.y * H + s.a * Math.sin(x * s.f + t * s.s + s.p) + s.a2 * Math.sin(x * s.f2 - t * s.s * 1.6 + s.p * 2);
+        x < 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    // keep the wind quiet behind the headline so the copy stays readable
+    const narrow = W < 700, mask = ctx.createLinearGradient(0, 0, narrow ? W : W * .62, 0);
+    mask.addColorStop(0, "rgba(5,5,6,.82)"); mask.addColorStop(narrow ? .72 : .55, "rgba(5,5,6,.82)"); mask.addColorStop(1, "rgba(5,5,6,0)");
+    ctx.fillStyle = mask; ctx.fillRect(0, 0, W, H);
+    // kite
+    const b = kiteBase();
+    let tx = b.x + 10 * Math.sin(t * .7), ty = b.y + 8 * Math.sin(t * 1.1 + 1);
+    if (px !== null) { tx += Math.max(-36, Math.min(36, (px - b.x) * .06)); ty += Math.max(-24, Math.min(24, (py - b.y) * .06)); }
+    kx += (tx - kx) * .06; ky += (ty - ky) * .06;
+    const rot = -.32 + .08 * Math.sin(t * .9), sc = b.s;
+    // string: from kite tail down to the lower left, riding the wind
+    const tail = { x: kx + Math.sin(-rot) * 58 * sc, y: ky + Math.cos(rot) * 58 * sc };
+    const ex = W < 700 ? W + 20 : W * .56, ey = H + 10;
+    ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 1.6; ctx.lineCap = "round"; ctx.beginPath();
+    ctx.moveTo(tail.x, tail.y);
+    ctx.bezierCurveTo(
+      tail.x - 30 + 14 * Math.sin(t * 1.3), tail.y + (ey - tail.y) * .35,
+      ex + 90 + 20 * Math.sin(t * .8 + 2), ey - (ey - tail.y) * .35,
+      ex, ey);
+    ctx.stroke();
+    ctx.save(); ctx.translate(kx, ky); ctx.rotate(rot); ctx.scale(sc, sc);
+    ctx.fillStyle = "#f4f4f3"; ctx.beginPath();
+    ctx.moveTo(0, -38); ctx.lineTo(22, -8); ctx.lineTo(0, 58); ctx.lineTo(-22, -8); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  function loop() { if (!running) return; t += 1 / 60; draw(); requestAnimationFrame(loop); }
+  size(); const b0 = kiteBase(); kx = b0.x; ky = b0.y;
+  new ResizeObserver(() => { size(); draw(); }).observe(cv);
+  const hero = document.querySelector(".hero");
+  hero.addEventListener("pointermove", e => { const r = cv.getBoundingClientRect(); px = e.clientX - r.left; py = e.clientY - r.top; });
+  hero.addEventListener("pointerleave", () => { px = py = null; });
+  if (reduce) { draw(); }
+  else {
+    new IntersectionObserver(([e]) => { const was = running; running = e.isIntersecting; if (running && !was) loop(); }).observe(hero);
+    loop();
+  }
+
+  /* ---------- engine ---------- */
+  const steps = {
+    mix: { q: "What mix of posts fits this account?", type: "score · fit per kind → share of drafts", foot: "Jev score question, one per kind",
+      rows: [["Contrarian takes on agent workflows", "Challenges a popular belief with a specific example", .31],
+             ["Build logs", "What I shipped this week and what broke", .24],
+             ["Teardowns of viral agent demos", "What's real, what's staged", .19],
+             ["Reply threads", "Showing up in bigger accounts' conversations", .16],
+             ["Tool comparisons", "Side-by-side on a real task", .10]] },
+    ideas: { q: "Which idea goes first?", type: "choice · interest, timing, authority, debate, freshness", foot: "Jev choice question",
+      rows: [["Agents make you worse at reading code", "Hot debate this week on r/programming and HN", .41],
+             ["The 9 PRs I reverted from my agent", "Your own data, nobody else has it", .27],
+             ["Code review is the new job", "Strong, but you posted a close cousin in June", .19],
+             ["A new open-weights model is out", "Timely, but twenty accounts already covered it", .13]] },
+    posts: { q: "Which draft wins head to head?", type: "choice · after hook, voice, bait and rehash scores", foot: "Jev choice question over three finalists",
+      rows: [["“The first thing you lose to agents isn't your typing. It's your taste.”", "74 JEV · bait 4%", .52],
+             ["“I let an agent run my repo for a week. I reverted 9 of its 31 PRs…”", "69 JEV · bait 11%", .27],
+             ["“Hot take: code review is becoming the actual job.”", "61 JEV · bait 18%", .21]] },
+    actions: { q: "What should you do first?", type: "choice · impact, effort, fit, odds, risk", foot: "Jev choice question, then a score for each action",
+      rows: [["Reply to 15 posts from mid-size agent accounts", "High impact, 30 minutes, fits your voice", .46],
+             ["Rewrite the bio and pin your best post", "Cheap, lifts every profile visit", .29],
+             ["Start a 3×/week “what my agent got wrong” series", "Big upside, needs consistency", .17],
+             ["DM five builders for a collab thread", "Risky before you have reach", .08]] },
+  };
+  const erows = document.getElementById("erows");
+  function showStep(key) {
+    const s = steps[key];
+    document.getElementById("eq").textContent = s.q;
+    document.getElementById("eqt").textContent = s.type;
+    document.getElementById("efoot").textContent = s.foot;
+    const max = Math.max(...s.rows.map(r => r[2]));
+    erows.innerHTML = "";
+    s.rows.forEach(([title, sub, p]) => {
+      const row = document.createElement("div");
+      row.className = "r" + (p === max ? " top" : "");
+      const t = document.createElement("div"); t.className = "t";
+      t.textContent = title;
+      if (p === max) { const k = document.createElement("span"); k.className = "pick"; k.textContent = "Jev's pick"; t.append(k); }
+      const sm = document.createElement("small"); sm.textContent = sub; t.append(sm);
+      const bar = document.createElement("div"); bar.className = "bar";
+      bar.innerHTML = `<div class="track"><div class="fill" style="width:0"></div></div><span class="pct">${Math.round(p * 100)}%</span>`;
+      row.append(t, bar); erows.append(row);
+      requestAnimationFrame(() => requestAnimationFrame(() => { bar.querySelector(".fill").style.width = (p / max * 100) + "%"; }));
+    });
+    document.querySelectorAll(".steps button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.step === key)));
+  }
+  document.querySelectorAll(".steps button").forEach(b => b.addEventListener("click", () => showStep(b.dataset.step)));
+  showStep("mix");
+
+  /* ---------- today demo ---------- */
+  const focusItems = [
+    { t: "Reply to 15 posts from mid-size agent accounts", done: false,
+      thread: ["Search “agent” posts from the last 24 hours by accounts with 5k–50k followers", "Draft a reply for each; Jev keeps the 15 that add something", "Post, then tick them off here"] },
+    { t: "Rewrite the bio and pin your best post", done: true,
+      thread: ["Jev picked bio 2 of 5: “I test AI coding agents on real repos and write up what breaks.”", "Pin the “taste” post (74 JEV)"] },
+    { t: "Start a 3×/week “what my agent got wrong” series", done: false,
+      thread: ["Pick the days: Mon, Wed, Fri", "Kite drafts the first three from your build log", "Add the series to the brain so plans keep it going"] },
+  ];
+  const focus = document.getElementById("focus"), days = document.getElementById("days");
+  const tick = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2 5 8.6 9.6 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function renderFocus() {
+    focus.innerHTML = "";
+    focusItems.forEach((it, i) => {
+      const li = document.createElement("li"); if (it.done) li.className = "done";
+      const row = document.createElement("div"); row.className = "fi";
+      const c = document.createElement("button"); c.type = "button"; c.className = "check"; c.innerHTML = tick;
+      c.setAttribute("aria-label", (it.done ? "Mark not done: " : "Mark done: ") + it.t);
+      c.addEventListener("click", () => { it.done = !it.done; renderFocus(); });
+      const ft = document.createElement("span"); ft.className = "ft"; ft.textContent = it.t;
+      const w = document.createElement("button"); w.type = "button"; w.className = "work";
+      w.textContent = it.open ? "Close" : "Work on it →"; w.setAttribute("aria-expanded", String(!!it.open));
+      w.addEventListener("click", () => { it.open = !it.open; renderFocus(); });
+      row.append(c, ft, w); li.append(row);
+      if (it.open) {
+        const th = document.createElement("div"); th.className = "thread";
+        th.innerHTML = "<p>Thread · checklist from the writer</p>";
+        const ol = document.createElement("ol"); it.thread.forEach(x => { const l = document.createElement("li"); l.textContent = x; ol.append(l); });
+        th.append(ol); li.append(th);
+      }
+      focus.append(li);
+    });
+    const n = focusItems.filter(x => x.done).length, all = n === focusItems.length;
+    document.getElementById("focusLbl").textContent = `Focus · ${n}/${focusItems.length} done`;
+    const pattern = [1, 1, 0, 1, 1, 1, all ? 1 : 0];
+    days.innerHTML = pattern.map((on, i) => `<i class="${on ? "on" : ""}${i === 6 ? " today" : ""}"></i>`).join("");
+    document.getElementById("streakTxt").textContent = `${all ? 4 : 3}-day streak`;
+  }
+  renderFocus();
+
+  const drafts = [
+    { text: "The first thing you lose to agents isn't your typing. It's your taste.", jev: 74, h2h: 52,
+      m: { hook: 82, shareability: 71, discussion: 78, novelty: 66, clarity: 88, fit: 80, voice: 84, bait: 4, rehash: 9 } },
+    { text: "I let an agent run my repo for a week. It shipped 31 PRs. I reverted 9. Here's what the 9 had in common.", jev: 69, h2h: 27,
+      m: { hook: 76, shareability: 64, discussion: 58, novelty: 72, clarity: 81, fit: 77, voice: 70, bait: 11, rehash: 6 } },
+    { text: "Hot take: code review is becoming the actual job. Writing code is the warm-up.", jev: 61, h2h: 21,
+      m: { hook: 70, shareability: 62, discussion: 74, novelty: 41, clarity: 85, fit: 72, voice: 66, bait: 18, rehash: 38 } },
+  ];
+  let di = 0;
+  const metrics = document.getElementById("metrics");
+  function renderDraft() {
+    const d = drafts[di];
+    document.getElementById("draft").textContent = d.text;
+    document.getElementById("pg").textContent = `${di + 1}/${drafts.length}`;
+    document.getElementById("dmeta").innerHTML = `<span><b>${d.jev}</b> JEV</span><span>head-to-head <b>${d.h2h}%</b></span><span>bait <b>${d.m.bait}%</b></span>`;
+    document.getElementById("jev").textContent = d.jev;
+    metrics.innerHTML = Object.entries(d.m).map(([k, v]) => {
+      const inv = k === "bait" || k === "rehash";
+      return `<li class="${inv ? "inv" : ""}"><span>${k}${inv ? " ↓" : ""}</span><span class="track"><span class="fill" style="width:${v}%"></span></span><b>${v}</b></li>`;
+    }).join("");
+  }
+  document.getElementById("prev").addEventListener("click", () => { di = (di + drafts.length - 1) % drafts.length; renderDraft(); });
+  document.getElementById("next").addEventListener("click", () => { di = (di + 1) % drafts.length; renderDraft(); });
+  renderDraft();
+
+  /* ---------- brain graph ---------- */
+  const nodes = [
+    { id: "dir", x: 320, y: 190, l: "Direction", core: true },
+    { id: "prof", x: 150, y: 110, l: "Profile" },
+    { id: "plan", x: 470, y: 90, l: "Plan · Sep 24" },
+    { id: "plan0", x: 560, y: 200, l: "Plan · Sep 17" },
+    { id: "post", x: 500, y: 300, l: "Posted: taste" },
+    { id: "skip", x: 300, y: 325, l: "Skipped: collab DMs" },
+    { id: "learn", x: 120, y: 260, l: "Replies beat posts" },
+    { id: "voice", x: 70, y: 170, l: "Voice" },
+    { id: "series", x: 330, y: 55, l: "Series: agent got wrong" },
+  ];
+  const edges = [["dir","prof"],["dir","plan"],["dir","plan0"],["dir","learn"],["dir","skip"],["plan","post"],["plan","series"],["plan","skip"],["plan0","post"],["prof","voice"],["learn","post"],["prof","learn"],["series","dir"]];
+  const svg = document.getElementById("graph"), NS = "http://www.w3.org/2000/svg";
+  const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const lines = edges.map(([a, b]) => {
+    const l = document.createElementNS(NS, "line");
+    l.setAttribute("x1", byId[a].x); l.setAttribute("y1", byId[a].y); l.setAttribute("x2", byId[b].x); l.setAttribute("y2", byId[b].y);
+    l.dataset.a = a; l.dataset.b = b; svg.append(l); return l;
+  });
+  const groups = nodes.map(n => {
+    const g = document.createElementNS(NS, "g"); g.classList.add("node"); if (n.core) g.classList.add("core"); g.dataset.id = n.id;
+    const c = document.createElementNS(NS, "circle"); c.setAttribute("cx", n.x); c.setAttribute("cy", n.y); c.setAttribute("r", n.core ? 9 : 6);
+    const t = document.createElementNS(NS, "text"); t.setAttribute("x", n.x); t.setAttribute("y", n.y + (n.core ? 26 : 21)); t.setAttribute("text-anchor", "middle"); t.textContent = n.l;
+    const hit = document.createElementNS(NS, "circle"); hit.setAttribute("cx", n.x); hit.setAttribute("cy", n.y); hit.setAttribute("r", 22); hit.setAttribute("fill", "transparent"); hit.style.stroke = "none";
+    g.append(c, t, hit); svg.append(g); return g;
+  });
+  function hot(id) {
+    const nb = new Set([id]);
+    lines.forEach(l => { const on = id && (l.dataset.a === id || l.dataset.b === id); l.classList.toggle("hot", !!on); if (on) { nb.add(l.dataset.a); nb.add(l.dataset.b); } });
+    groups.forEach(g => g.classList.toggle("hot", !!id && nb.has(g.dataset.id)));
+  }
+  groups.forEach(g => { g.addEventListener("pointerenter", () => hot(g.dataset.id)); g.addEventListener("pointerleave", () => hot(null)); });
+
+  /* ---------- quick start ---------- */
+  const code = {
+    docker: [["git clone https://github.com/brieflyalongsidemore/kite && cd kite"], ["cp .env.example .env", "add a writer key and a Jev key"], ["docker compose up -d", "→ http://localhost:8788, data in ./data"]],
+    pip: [["git clone https://github.com/brieflyalongsidemore/kite && cd kite"], ["cp .env.example .env", "add a writer key and a Jev key"], ["pip install -e ."], ["kite", "→ http://localhost:8788"]],
+  };
+  let cur = "docker";
+  const pre = document.getElementById("startCode");
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  function showCode(k) {
+    cur = k;
+    pre.innerHTML = code[k].map(([c, n]) => esc(c) + (n ? " ".repeat(Math.max(2, 24 - c.length)) + `<span class="c"># ${esc(n)}</span>` : "")).join("\n");
+    document.querySelectorAll(".start-tabs [data-t]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.t === k)));
+  }
+  document.querySelectorAll(".start-tabs [data-t]").forEach(b => b.addEventListener("click", () => showCode(b.dataset.t)));
+  const cs = document.getElementById("copyStart");
+  cs.addEventListener("click", () => copy(cs, code[cur].map(r => r[0]).join("\n")));
+  showCode("docker");
+})();
+</script>
+</body>
+</html>
