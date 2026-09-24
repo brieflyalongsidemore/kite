@@ -21,3 +21,6 @@ build/
 
 # Local tooling
 .claude/
+
+# Vercel CLI link
+.vercel/
