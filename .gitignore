@@ -24,3 +24,6 @@ build/
 
 # Vercel CLI link
 .vercel/
+
+# Local Docker overrides
+docker-compose.override.yml
