@@ -467,16 +467,16 @@ async function loadBrain() {
   loadTrash();
   if (G.sel && G.byId[G.sel]) openNote(G.sel, true);
 }
-const radius = (n) => (n.folder === "Log" ? 3 : 4 + Math.min(10, Math.sqrt(n.deg) * 2.2));
+const radius = (n) => (n.folder === "Log" ? 3 : n.folder ? 4 + Math.min(4, Math.sqrt(n.deg) * 1.2) : 6 + Math.min(7, Math.sqrt(n.deg) * 1.8));
 function tick() {
   const N = G.nodes, k = G.alpha;
   for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) {
     const a = N[i], b = N[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy + 0.01;
     if (d2 > 250000) continue;
-    const f = (1100 / d2) * k; dx *= f; dy *= f; a.vx += dx; a.vy += dy; b.vx -= dx; b.vy -= dy;
+    const f = (1800 / d2) * k; dx *= f; dy *= f; a.vx += dx; a.vy += dy; b.vx -= dx; b.vy -= dy;
   }
   for (const [ia, ib] of G.edges) {
-    const a = G.byId[ia], b = G.byId[ib], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, f = ((d - 75) / d) * 0.06 * k;
+    const a = G.byId[ia], b = G.byId[ib], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, f = ((d - 90) / d) * 0.05 * k;
     a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
   }
   for (const n of N) { n.vx -= n.x * 0.015 * k; n.vy -= n.y * 0.015 * k; if (n !== G.drag) { n.x += n.vx; n.y += n.vy; } n.vx *= 0.82; n.vy *= 0.82; }
@@ -495,34 +495,51 @@ function loop() {
   requestAnimationFrame(loop);
 }
 function resize() {
+  // Size the bitmap in device pixels. devicePixelRatio can be below 1 (zoomed out, scaled panes).
   const c = $("#graph"), dpr = window.devicePixelRatio || 1, r = c.getBoundingClientRect();
-  c.width = r.width * dpr; c.height = r.height * dpr; G.dpr = dpr;
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  G.dpr = dpr; G.w = r.width; G.h = r.height;
 }
 window.addEventListener("resize", () => { if (view === "brain") { resize(); draw(); } });
+new ResizeObserver(() => { if (view === "brain") { resize(); draw(); } }).observe($("#graph"));
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const shortTitle = (t) => (t.length > 32 ? t.slice(0, 30).trimEnd() + "…" : t);
 function draw() {
-  const c = $("#graph"), ctx = c.getContext("2d"), fg = css("--fg"), dim = css("--faint"), bg = css("--bg");
-  ctx.setTransform(G.dpr, 0, 0, G.dpr, 0, 0); ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height);
-  ctx.translate(G.ox, G.oy); ctx.scale(G.scale, G.scale);
+  const c = $("#graph"), ctx = c.getContext("2d"), fg = css("--fg"), dim = css("--dim"), bg = css("--bg");
+  // Clear in raw device pixels so the whole bitmap is wiped whatever the pixel ratio is.
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height);
+  const s = G.dpr * G.scale; ctx.setTransform(s, 0, 0, s, G.dpr * G.ox, G.dpr * G.oy);
   const focus = G.hover || G.sel, near = focus ? G.adj[focus] : null;
   const match = (n) => !G.filter || n.title.toLowerCase().includes(G.filter);
   const lit = (n) => (!focus || n.id === focus || near.has(n.id)) && match(n);
+  const px = 1 / G.scale;
+  ctx.lineCap = "round";
   for (const [ia, ib] of G.edges) {
     const a = G.byId[ia], b = G.byId[ib], on = focus && (ia === focus || ib === focus);
-    ctx.strokeStyle = on ? fg : dim; ctx.globalAlpha = on ? 0.9 : focus || G.filter ? 0.1 : 0.35; ctx.lineWidth = 1 / G.scale;
+    ctx.strokeStyle = on ? fg : dim; ctx.globalAlpha = on ? 0.85 : focus || G.filter ? 0.3 : 0.55; ctx.lineWidth = (on ? 1.25 : 1) * px;
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
+  const labels = [];
   for (const n of G.nodes) {
     const r = radius(n), on = lit(n);
-    ctx.globalAlpha = on ? (n.status === "skipped" ? 0.35 : 1) : 0.12;
+    ctx.globalAlpha = on ? (n.status === "skipped" ? 0.45 : 1) : 0.35;
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 6.2832);
-    if (n.folder === "Actions" && n.status !== "done") { ctx.fillStyle = bg; ctx.fill(); ctx.strokeStyle = fg; ctx.lineWidth = 1.5 / G.scale; ctx.stroke(); }
+    ctx.fillStyle = bg; ctx.fill();  // knock out the edges behind the node
+    if (n.folder === "Actions" && n.status !== "done") { ctx.strokeStyle = fg; ctx.lineWidth = 1.5 * px; ctx.stroke(); }
     else { ctx.fillStyle = n.folder === "Log" ? dim : fg; ctx.fill(); }
-    if (n.id === G.sel) { ctx.beginPath(); ctx.arc(n.x, n.y, r + 4, 0, 6.2832); ctx.strokeStyle = fg; ctx.lineWidth = 1 / G.scale; ctx.stroke(); }
-    if (on && (n.id === focus || near?.has(n.id) || G.scale > 1.3 || n.deg >= 4 || (G.filter && match(n)))) {
-      ctx.fillStyle = fg; ctx.font = `${12 / Math.max(1, G.scale * 0.8)}px system-ui, sans-serif`; ctx.textAlign = "center";
-      ctx.fillText(n.title.length > 38 ? n.title.slice(0, 36) + "…" : n.title, n.x, n.y + r + 13 / G.scale);
-    }
+    if (n.id === G.sel) { ctx.beginPath(); ctx.arc(n.x, n.y, r + 4 * px + 1, 0, 6.2832); ctx.strokeStyle = fg; ctx.lineWidth = px; ctx.stroke(); }
+    const few = G.nodes.length <= 24;
+    if (on && (n.id === focus || near?.has(n.id) || (G.filter && match(n)) || (n.folder !== "Log" && (few || !n.folder || G.scale > 1.4 || n.deg >= 4)))) labels.push([n, r]);
+  }
+  // Labels last, with a halo in the background colour so lines never run through the text.
+  ctx.globalAlpha = 1; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.lineJoin = "round";
+  for (const [n, r] of labels) {
+    const strong = n.id === focus || !n.folder;
+    ctx.font = `${strong ? 500 : 400} ${11.5 * px}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif`;
+    const t = shortTitle(n.title), y = n.y + r + 5 * px;
+    ctx.strokeStyle = bg; ctx.lineWidth = 4 * px; ctx.strokeText(t, n.x, y);
+    ctx.fillStyle = strong || (focus && near?.has(n.id)) ? fg : dim; ctx.fillText(t, n.x, y);
   }
   ctx.globalAlpha = 1;
 }
@@ -537,7 +554,12 @@ graph.addEventListener("pointerdown", (e) => {
 });
 graph.addEventListener("pointermove", (e) => {
   const p = toWorld(e);
-  if (G.drag) { G.drag.x = p.x; G.drag.y = p.y; G.moved = true; draw(); return; }
+  if (G.drag) {
+    // keep the dragged note inside the visible map
+    const m = 24, lo = (o) => (m - o) / G.scale, hi = (size, o) => (size - m - o) / G.scale;
+    G.drag.x = Math.min(hi(G.w, G.ox), Math.max(lo(G.ox), p.x)); G.drag.y = Math.min(hi(G.h, G.oy), Math.max(lo(G.oy), p.y));
+    G.moved = true; draw(); return;
+  }
   if (G.pan) { G.ox = e.clientX - G.pan.x; G.oy = e.clientY - G.pan.y; G.moved = true; draw(); return; }
   const n = nodeAt(p), id = n ? n.id : null;
   if (id !== G.hover) { G.hover = id; graph.title = n ? n.id : ""; draw(); }
