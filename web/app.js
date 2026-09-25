@@ -364,7 +364,7 @@ function renderThread(th) {
       <textarea id="tInput" placeholder="Paste the posts you want to reply to (or attach screenshots), ask for changes, or say what you did."></textarea>
       <div class="row" style="margin-top:8px"><button class="btn ghost sm" id="tAttach">Attach</button><input type="file" id="tFile" multiple accept="image/*,.txt,.csv,.json,.md" hidden>
         <span class="tiny dim grow" id="tStatus">${th.cost ? `≈ $${th.cost.toFixed(2)} so far · ` : ""}⌘↵ to send</span>
-        <button class="btn quiet sm" id="tDelete">Delete</button><button class="btn" id="tSend" ${th.busy ? "disabled" : ""}>Send</button></div>
+        <button class="btn quiet sm" id="tShare">Share</button><button class="btn quiet sm" id="tDelete">Delete</button><button class="btn" id="tSend" ${th.busy ? "disabled" : ""}>Send</button></div>
     </div>`;
   $("#tInput").value = draft;
   const cl = $("#checklist");
@@ -400,6 +400,10 @@ function renderThread(th) {
   $("#tFile").onchange = async (e) => { threadFiles = threadFiles.concat(await readFiles(e.target.files)); $("#tStatus").textContent = `${threadFiles.length} attached`; };
   $("#tSend").onclick = () => sendThread(th.id);
   $("#tInput").onkeydown = (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendThread(th.id); };
+  $("#tShare").onclick = () => {
+    const last = [...th.display].reverse().find((m) => m.role === "cards");
+    showShare(last ? shareFromCards(last, th) : shareFromChecklist(th), th.action);
+  };
   $("#tDelete").onclick = async () => { if (!confirm("Delete this thread?")) return; await api(`/api/thread/${th.id}/delete`, {}); go("threads"); };
 }
 
@@ -407,7 +411,7 @@ function cardsEl(m, th) {
   const el = document.createElement("div");
   el.className = "msg";
   const head = { replies: "Replies to", posts: "Posts", choice: "Jev's pick" }[m.kind] || "";
-  el.innerHTML = `<div class="who">Jev · ${esc(head)}</div>${m.kind === "replies" ? `<p class="small dim" style="margin:0 0 8px">${esc(m.title)}</p>` : m.kind === "choice" ? `<p class="small dim" style="margin:0 0 8px">${esc(m.title)}</p>` : ""}<div class="opts"></div>`;
+  el.innerHTML = `<div class="row cardhead"><div class="who grow">Jev · ${esc(head)}</div><button class="btn quiet sm shareCard">Share</button></div>${m.kind === "replies" ? `<p class="small dim" style="margin:0 0 8px">${esc(m.title)}</p>` : m.kind === "choice" ? `<p class="small dim" style="margin:0 0 8px">${esc(m.title)}</p>` : ""}<div class="opts"></div>`;
   const items = [...m.items].sort((a, b) => (b.score ?? b.viral ?? b.p ?? 0) - (a.score ?? a.viral ?? a.p ?? 0));
   items.forEach((it, i) => {
     const o = document.createElement("div");
@@ -427,12 +431,199 @@ function cardsEl(m, th) {
     });
     $(".opts", el).append(o);
   });
+  $(".shareCard", el).onclick = () => showShare(shareFromCards(m, th), th.action);
   if (items.length > 2) {
     const more = document.createElement("button"); more.className = "btn quiet sm"; more.textContent = `Show ${items.length - 2} more`;
     more.onclick = () => { $$(".opt", el).forEach((o) => (o.hidden = false)); more.remove(); };
     el.append(more);
   }
   return el;
+}
+
+// ---------------------------------------------------------------- Share as image
+
+const CARD_LABEL = { replies: "Replies, ranked by Jev", posts: "Posts, scored by Jev", choice: "Jev's pick" };
+function shareFromCards(m, th) {
+  const items = [...m.items].sort((a, b) => (b.score ?? b.viral ?? b.p ?? 0) - (a.score ?? a.viral ?? a.p ?? 0)).slice(0, 3);
+  const top = items[0]?.p ?? 1;
+  const rows = items.map((it) => m.kind === "choice" ? { n: pct(it.p), frac: it.p / (top || 1), text: it.text }
+    : { n: String(Math.round(it.viral ?? it.score ?? 0)), frac: (it.viral ?? it.score ?? 0) / 100, text: it.text });
+  const done = th.checklist.filter((c) => c.done).length;
+  return { label: CARD_LABEL[m.kind] || "Jev", title: th.action, subtitle: m.kind === "posts" ? "" : m.title, rows,
+    foot: th.checklist.length ? `${done}/${th.checklist.length} steps done` : "" };
+}
+function shareFromChecklist(th) {
+  const done = th.checklist.filter((c) => c.done).length;
+  return { label: "Working on it", title: th.action, subtitle: th.reason || "", check: true,
+    rows: th.checklist.slice(0, 8).map((c) => ({ n: c.done ? "✓" : "○", done: c.done, text: c.text })), foot: `${done}/${th.checklist.length} steps done` };
+}
+function wrapLines(ctx, text, width, max) {
+  // Wrap each paragraph on its own so a post's line breaks survive; stop at `max` lines.
+  const paras = String(text || "").split(/\n+/).map((p) => p.replace(/\s+/g, " ").trim().split(" ").filter(Boolean)).filter((p) => p.length);
+  const lines = [];
+  let cut = false;
+  for (const words of paras) {
+    let line = "";
+    for (let i = 0; i < words.length; i++) {
+      const t = line ? `${line} ${words[i]}` : words[i];
+      if (line && ctx.measureText(t).width > width) {
+        lines.push(line); line = words[i];
+        if (lines.length === max) { cut = true; break; }
+      } else line = t;
+    }
+    if (cut) break;
+    if (lines.length === max) { cut = true; break; }
+    lines.push(line);
+  }
+  if (cut || lines.length > max) {  // ran out of room: end the last line with an ellipsis
+    lines.length = Math.min(lines.length, max);
+    let last = lines[lines.length - 1];
+    while (last && ctx.measureText(`${last}…`).width > width) last = last.slice(0, -1);
+    lines[lines.length - 1] = `${last.trimEnd()}…`;
+  }
+  return lines;
+}
+function shareCanvas(d) {
+  // 1200px wide, drawn at 2x. Pure black and white, like the app.
+  const W = 1200, P = 72, S = 2, TEXT = W - 2 * P, NUM = d.check ? 56 : 132;
+  const sans = (w, px) => `${w} ${px}px -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif`;
+  const mono = (px) => `500 ${px}px ui-monospace, "SF Mono", Menlo, monospace`;
+  const m = document.createElement("canvas").getContext("2d");
+  m.font = sans(700, 44); const title = wrapLines(m, d.title, TEXT, 3);
+  m.font = sans(400, 23); const sub = d.subtitle ? wrapLines(m, d.subtitle, TEXT, 2) : [];
+  m.font = sans(400, d.check ? 25 : 24); const rows = d.rows.map((r) => ({ ...r, lines: wrapLines(m, r.text, TEXT - NUM - 28, d.check ? 2 : 4) }));
+  const lh = d.check ? 34 : 34, gap = d.check ? 18 : 40;
+  let y = P + 34 + 64;
+  const titleY = y; y += title.length * 54;
+  const subY = y + 14; if (sub.length) y += 14 + sub.length * 32;
+  y += 44;
+  rows.forEach((r) => { r.y = y; y += r.lines.length * lh + (d.check ? 0 : 22) + gap; });
+  const H = Math.max(675, y + 56 + P);
+
+  const c = document.createElement("canvas"); c.width = W * S; c.height = H * S;
+  const x = c.getContext("2d"); x.scale(S, S);
+  x.fillStyle = "#0a0a0a"; x.fillRect(0, 0, W, H);
+  x.textBaseline = "alphabetic";
+  // header: kite mark + wordmark, label on the right
+  x.fillStyle = "#f4f4f4"; x.beginPath(); x.moveTo(P + 12, P); x.lineTo(P + 24, P + 13); x.lineTo(P + 12, P + 32); x.lineTo(P, P + 13); x.closePath(); x.fill();
+  x.font = sans(700, 28); x.fillText("kite", P + 36, P + 25);
+  x.font = mono(15); x.fillStyle = "#8c8c8c"; x.textAlign = "right"; x.fillText(d.label.toUpperCase().split("").join(String.fromCharCode(8202)), W - P, P + 22); x.textAlign = "left";
+  // title and question
+  x.fillStyle = "#f4f4f4"; x.font = sans(700, 44); title.forEach((l, i) => x.fillText(l, P, titleY + i * 54));
+  x.fillStyle = "#9a9a9a"; x.font = sans(400, 23); sub.forEach((l, i) => x.fillText(l, P, subY + i * 32 + 18));
+  // rows
+  const round = (rx, ry, rw, rh, rr) => { x.beginPath(); x.roundRect ? x.roundRect(rx, ry, rw, rh, rr) : x.rect(rx, ry, rw, rh); };
+  rows.forEach((r, i) => {
+    const best = !d.check && i === 0, textH = r.lines.length * lh;
+    if (best) { x.strokeStyle = "#f4f4f4"; x.lineWidth = 1.5; round(P - 22, r.y - 34, TEXT + 44, textH + 22 + 40, 16); x.stroke(); }
+    x.fillStyle = d.check ? (r.done ? "#f4f4f4" : "#6e6e6e") : best ? "#f4f4f4" : "#8c8c8c";
+    x.font = d.check ? sans(600, 26) : sans(700, 38); x.fillText(r.n, P, r.y + (d.check ? 0 : 6));
+    x.fillStyle = d.check ? (r.done ? "#8c8c8c" : "#f4f4f4") : best ? "#f4f4f4" : "#b4b4b4";
+    x.font = sans(400, d.check ? 25 : 24); r.lines.forEach((l, j) => x.fillText(l, P + NUM + 28, r.y + j * lh));
+    if (d.check && r.done) { x.fillRect(P + NUM + 28, r.y - 9, Math.min(TEXT - NUM - 28, x.measureText(r.lines[0]).width), 1.5); }
+    if (!d.check) {
+      const bx = P + NUM + 28, by = r.y + textH - 12, bw = TEXT - NUM - 28;
+      x.fillStyle = "#222"; round(bx, by, bw, 5, 3); x.fill();
+      x.fillStyle = best ? "#f4f4f4" : "#555"; round(bx, by, Math.max(6, bw * Math.min(1, r.frac || 0)), 5, 3); x.fill();
+    }
+  });
+  // footer
+  x.fillStyle = "#2a2a2a"; x.fillRect(P, H - P - 30, TEXT, 1);
+  x.font = sans(400, 18); x.fillStyle = "#8c8c8c"; x.fillText("made with kite · open-kite.vercel.app", P, H - P + 4);
+  if (d.foot) { x.textAlign = "right"; x.fillText(d.foot, W - P, H - P + 4); x.textAlign = "left"; }
+  return c;
+}
+function brainCanvas() {
+  // "What kite learned in N days": the real map as a constellation, with the numbers that show it growing.
+  const W = 1200, H = 675, S = 2, st = G.stats || { days: [], learnings: [] };
+  const sans = (w, px) => `${w} ${px}px -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif`;
+  const mono = (px) => `500 ${px}px ui-monospace, "SF Mono", Menlo, monospace`;
+  const c = document.createElement("canvas"); c.width = W * S; c.height = H * S;
+  const x = c.getContext("2d"); x.scale(S, S);
+  x.fillStyle = "#0a0a0a"; x.fillRect(0, 0, W, H);
+
+  // --- the map, fitted into the left panel
+  const A = { x: 36, y: 36, w: 660, h: 560 }, pad = 56;
+  const xs = G.nodes.map((n) => n.x), ys = G.nodes.map((n) => n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const k = Math.min((A.w - 2 * pad) / (maxX - minX || 1), (A.h - 2 * pad) / (maxY - minY || 1), 2.4);
+  const cx = A.x + A.w / 2, cy = A.y + A.h / 2, mx = (minX + maxX) / 2, my = (minY + maxY) / 2;
+  const P = (n) => [cx + (n.x - mx) * k, cy + (n.y - my) * k];
+  // faint growth rings behind it
+  x.strokeStyle = "#161616"; x.lineWidth = 1;
+  for (let r = 70; r < 420; r += 70) { x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke(); }
+  const core = (n) => !n.folder;
+  for (const [ia, ib] of G.edges) {
+    const a = G.byId[ia], b = G.byId[ib], [ax, ay] = P(a), [bx, by] = P(b);
+    x.strokeStyle = core(a) && core(b) ? "#5a5a5a" : "#343434"; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(ax, ay); x.lineTo(bx, by); x.stroke();
+  }
+  const labels = [];
+  for (const n of G.nodes) {
+    const [nx, ny] = P(n), r = radius(n) * 1.15;
+    x.beginPath(); x.arc(nx, ny, r, 0, 6.2832);
+    if (n.folder === "Actions" && n.status !== "done") { x.fillStyle = "#0a0a0a"; x.fill(); x.strokeStyle = "#d8d8d8"; x.lineWidth = 1.5; x.stroke(); }
+    else { x.fillStyle = n.folder === "Log" ? "#6a6a6a" : core(n) ? "#f4f4f4" : "#cfcfcf"; x.fill(); }
+    if (core(n)) labels.push([n, nx, ny + r + 18]);
+  }
+  x.textAlign = "center"; x.lineJoin = "round";
+  for (const [n, lx, ly] of labels) {
+    x.font = sans(core(n) ? 600 : 400, 15); const t = shortTitle(n.title);
+    x.strokeStyle = "#0a0a0a"; x.lineWidth = 5; x.strokeText(t, lx, ly);
+    x.fillStyle = core(n) ? "#f4f4f4" : "#a8a8a8"; x.fillText(t, lx, ly);
+  }
+  x.textAlign = "left";
+
+  // --- the story, on the right
+  const R = 744, RW = W - R - 48;
+  const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const first = st.days[0]?.day, days = first ? Math.max(1, Math.floor((today - new Date(`${first}T00:00:00`)) / 864e5) + 1) : 1;
+  x.fillStyle = "#f4f4f4"; x.beginPath(); x.moveTo(R + 11, 50); x.lineTo(R + 22, 62); x.lineTo(R + 11, 80); x.lineTo(R, 62); x.closePath(); x.fill();
+  x.font = sans(700, 26); x.fillText("kite", R + 32, 73);
+  x.font = mono(14); x.fillStyle = "#8c8c8c"; x.textAlign = "right"; x.fillText("BRAIN", W - 48, 71); x.textAlign = "left";
+  x.fillStyle = "#f4f4f4"; x.font = sans(700, 42);
+  x.fillText("what kite learned", R, 150); x.fillText(`in ${days} day${days === 1 ? "" : "s"}`, R, 198);
+  const stat = (n, label, sx, sy) => { x.fillStyle = "#f4f4f4"; x.font = sans(700, 40); x.fillText(String(n), sx, sy); x.fillStyle = "#8c8c8c"; x.font = sans(400, 16); x.fillText(label, sx, sy + 24); };
+  stat(st.notes ?? G.nodes.length, "notes", R, 270); stat(G.edges.length, "links", R + RW / 2, 270);
+  stat(st.actions ? `${st.done}/${st.actions}` : 0, "actions done", R, 350); stat(st.posts ?? 0, st.posts === 1 ? "post published" : "posts published", R + RW / 2, 350);
+  const lesson = st.learnings?.[0];
+  if (lesson) {
+    x.font = mono(12); x.fillStyle = "#8c8c8c"; x.fillText("WHAT IT KNOWS ABOUT ME", R, 418);
+    x.font = sans(400, 19); x.fillStyle = "#e6e6e6"; wrapLines(x, lesson, RW, 3).forEach((l, i) => x.fillText(l, R, 448 + i * 27));
+  }
+  // memory added each day: the last 14 days, ending today
+  const byDay = Object.fromEntries(st.days.map((d) => [d.day, d.events]));
+  const recent = Array.from({ length: 14 }, (_, i) => { const d = new Date(today); d.setDate(d.getDate() - 13 + i); return byDay[dayKey(d)] || 0; });
+  const top = Math.max(1, ...recent);
+  x.font = mono(12); x.fillStyle = "#8c8c8c"; x.fillText("MEMORY ADDED EACH DAY", R, 552);
+  recent.forEach((ev, i) => {
+    const g = Math.round(90 + (ev / top) * 154);
+    x.beginPath(); x.roundRect ? x.roundRect(R + i * 22, 564, 16, 16, 4) : x.rect(R + i * 22, 564, 16, 16);
+    if (ev) { x.fillStyle = `rgb(${g},${g},${g})`; x.fill(); } else { x.strokeStyle = "#2c2c2c"; x.lineWidth = 1; x.stroke(); }
+  });
+  // footer
+  x.fillStyle = "#2a2a2a"; x.fillRect(36, 616, W - 84, 1);
+  x.font = sans(400, 17); x.fillStyle = "#8c8c8c"; x.fillText("made with kite · open-kite.vercel.app", 48, 648);
+  x.textAlign = "right"; x.fillText("a local brain of plain markdown notes", W - 48, 648); x.textAlign = "left";
+  return c;
+}
+function showShare(data, name) {
+  const canvas = data instanceof HTMLCanvasElement ? data : shareCanvas(data), url = canvas.toDataURL("image/png");
+  const ov = document.createElement("div"); ov.className = "share-ov";
+  ov.innerHTML = `<div class="share-box" role="dialog" aria-label="Share image"><img alt="Preview of the image to share">
+    <div class="row"><button class="btn" id="shDl">Download</button><button class="btn ghost" id="shCp">Copy image</button><span class="grow"></span><button class="btn quiet" id="shX">Close</button></div></div>`;
+  $("img", ov).src = url;
+  document.body.append(ov);
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const close = () => { ov.remove(); document.removeEventListener("keydown", onKey); };
+  document.addEventListener("keydown", onKey);
+  ov.onclick = (e) => { if (e.target === ov) close(); };
+  $("#shX", ov).onclick = close;
+  $("#shDl", ov).onclick = () => { const a = document.createElement("a"); a.href = url; a.download = `kite-${String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40).replace(/-$/, "")}.png`; a.click(); };
+  $("#shCp", ov).onclick = () => canvas.toBlob(async (b) => {
+    try { await navigator.clipboard.write([new ClipboardItem({ "image/png": b })]); toast("Image copied"); } catch { toast("Couldn't copy; use Download"); }
+  });
 }
 
 async function sendThread(id) {
@@ -479,6 +670,7 @@ let noteMode = "read";
 async function loadBrain() {
   const d = await api("/api/brain");
   $("#brainPath").textContent = d.path;
+  G.stats = d.stats;
   const old = G.byId;
   G.nodes = d.nodes.map((n) => ({ ...n, x: old[n.id]?.x, y: old[n.id]?.y, vx: 0, vy: 0 }));
   G.byId = Object.fromEntries(G.nodes.map((n) => [n.id, n]));
@@ -607,6 +799,7 @@ graph.addEventListener("wheel", (e) => {
 $("#brainSearch").oninput = (e) => { G.filter = e.target.value.trim().toLowerCase(); draw(); };
 $("#brainSearch").onkeydown = (e) => { if (e.key === "Enter") { const n = G.nodes.find((x) => x.title.toLowerCase().includes(G.filter)); if (n) openNote(n.id); } };
 $("#brainRefresh").onclick = () => loadBrain();
+$("#brainShare").onclick = () => { if (G.nodes.length) showShare(brainCanvas(), "brain"); };
 
 function linkTo(t) {
   const a = document.createElement("a");

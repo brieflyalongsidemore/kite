@@ -234,7 +234,20 @@ def brain_graph():
             tid = target if target in notes else by_name.get(target.rsplit("/", 1)[-1].lower())
             if tid and tid != nid:
                 edges.add(tuple(sorted((nid, tid))))
-    return {"nodes": list(info.values()), "edges": [list(e) for e in edges], "path": str(BRAIN)}
+    return {"nodes": list(info.values()), "edges": [list(e) for e in edges], "path": str(BRAIN), "stats": brain_stats(notes, info)}
+
+
+def brain_stats(notes, info):
+    """Numbers for the brain's share card: what it holds, and how much it recorded each day."""
+    days = [{"day": nid[4:], "events": sum(line.startswith("- ") for line in p.read_text(errors="replace").splitlines())}
+            for nid, p in sorted(notes.items()) if nid.startswith("Log/")]
+    in_folder = lambda f: [n for n in info.values() if n["folder"] == f]  # noqa: E731
+    actions = in_folder("Actions")
+    learn = notes.get("Learnings")
+    learnings = [line[2:].strip() for line in learn.read_text(errors="replace").splitlines() if line.startswith("- ")][:3] if learn else []
+    return {"notes": len(notes), "days": days, "actions": len(actions), "done": sum(a["status"] == "done" for a in actions),
+            "skipped": sum(a["status"] == "skipped" for a in actions), "posts": len(in_folder("Posts")), "runs": len(in_folder("Runs")),
+            "learnings": learnings}
 
 
 def brain_note(rel):
