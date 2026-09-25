@@ -28,7 +28,7 @@ Today
 
 ## How it works
 
-1. **It learns your voice.** Paste your profile page (Cmd+A, Cmd+C), add screenshots, or upload an export such as X's `data/tweets.js`. You don't need a paid API. Kite writes an editable profile covering your niche, audience, voice, pillars, what performs and what flops.
+1. **It learns your voice.** Paste your profile page (Cmd+A, Cmd+C), add screenshots, upload an export such as X's `data/tweets.js`, or use the **kite clipper** bookmarklet (Settings › You): open your profile on any site, click it, and it collects your posts with their likes and replies from what's on your screen. You don't need an API. Kite writes an editable profile covering your niche, audience, voice, pillars, what performs and what flops.
 2. **It makes a plan.** The writer works as an agent, with Jev as its decision engine:
 
    | Step | Writer proposes | Jev decides |

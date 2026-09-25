@@ -100,7 +100,7 @@ def system(th):
         SYSTEM, f"BRAIN:\n{brain.BRAIN_GUIDE}", f"TODAY: {datetime.date.today().isoformat()}",
         f"PLATFORM: {jev.platform_of(c['platform'])[1]}", f"GOAL: {c['goal']}", f"PROFILE:\n{c['profile']}",
         f"THE ACCOUNT'S OWN POSTS (voice reference):\n{th.get('digest') or '(not provided)'}",
-        f"FROM THE PLANNING RUN:\n{th.get('context') or '(none)'}",
+        f"CONTEXT (from the plan, or posts the person collected to reply to):\n{th.get('context') or '(none)'}",
         f"THE ACTION:\n{th['action']}\nWhy it's in the plan: {th.get('reason') or '(not given)'}",
     ])
 

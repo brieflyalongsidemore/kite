@@ -209,11 +209,15 @@ def profile_job(body):
     platform, handle, pasted = body.get("platform", "x"), body.get("handle", "").strip(), body.get("pasted", "").strip()
 
     def work():
+        nonlocal pasted
         log = store.logger(job)
         images, posts, raw = sources.read_files(body.get("files"))
+        clip = sources.parse_clip(pasted)
+        if clip:  # posts collected by the Kite clipper, with their numbers
+            posts, pasted = sources.own_posts(clip, handle) + posts, ""
         src = None
         if posts:
-            log("tool", f"Read {len(posts)} posts from the export")
+            log("tool", f"Read {len(posts)} posts" + (" from the clipper" if clip else " from the export"))
             src = {"handle": handle, "posts": posts}
         elif not (pasted or raw or images) and handle:
             if platform == "bluesky":

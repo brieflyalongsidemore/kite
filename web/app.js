@@ -362,11 +362,19 @@ function renderThread(th) {
     <div class="chat" id="chat"></div>
     <div class="composer">
       <textarea id="tInput" placeholder="Paste the posts you want to reply to (or attach screenshots), ask for changes, or say what you did."></textarea>
-      <div class="row" style="margin-top:8px"><button class="btn ghost sm" id="tAttach">Attach</button><input type="file" id="tFile" multiple accept="image/*,.txt,.csv,.json,.md" hidden>
+      <div class="row" style="margin-top:8px"><button class="btn ghost sm" id="tAttach">Attach</button><button class="btn quiet sm" id="tClip" title="Collect posts from X, LinkedIn, Bluesky and more">Clip posts</button><input type="file" id="tFile" multiple accept="image/*,.txt,.csv,.json,.md" hidden>
         <span class="tiny dim grow" id="tStatus">${th.cost ? `≈ $${th.cost.toFixed(2)} so far · ` : ""}⌘↵ to send</span>
         <button class="btn quiet sm" id="tShare">Share</button><button class="btn quiet sm" id="tDelete">Delete</button><button class="btn" id="tSend" ${th.busy ? "disabled" : ""}>Send</button></div>
     </div>`;
   $("#tInput").value = draft;
+  if (pendingThreadText?.id === th.id) { $("#tInput").value = pendingThreadText.text; pendingThreadText = null; }
+  $("#tClip").onclick = () => showClipperGuide();
+  // A clip pasted here becomes a readable list of posts to reply to.
+  $("#tInput").addEventListener("input", (e) => {
+    const v = e.target.value.trim();
+    if (!v.startsWith('{"kite_clip"')) return;
+    try { e.target.value = clipAsText(JSON.parse(v)); } catch { /* not a complete clip; leave it as pasted */ }
+  });
   const cl = $("#checklist");
   cl.innerHTML = th.checklist.map((c, i) => `<label class="${c.done ? "done" : ""}"><input type="checkbox" data-i="${i}" ${c.done ? "checked" : ""}><span>${esc(c.text)}</span></label>`).join("");
   $$("input", cl).forEach((box) => (box.onchange = async () => {
@@ -383,7 +391,7 @@ function renderThread(th) {
   }
   for (const turn of turns) {
     const m = turn.user;
-    if (m && !m.hidden) chat.insertAdjacentHTML("beforeend", `<div class="msg user"><div class="who">You</div><div class="body">${esc(m.text)}${m.images ? `\n[${m.images} screenshot${m.images > 1 ? "s" : ""}]` : ""}</div></div>`);
+    if (m && !m.hidden) chat.insertAdjacentHTML("beforeend", `<div class="msg user"><div class="who">You</div><div class="body">${linkify(esc(m.text))}${m.images ? `\n[${m.images} screenshot${m.images > 1 ? "s" : ""}]` : ""}</div></div>`);
     const cards = turn.items.filter((x) => x.role === "cards"), last = cards[cards.length - 1];
     if (cards.length > 1) {
       const d = document.createElement("details"); d.className = "rounds";
@@ -908,7 +916,10 @@ async function loadSettings() {
       <div class="row"><select id="pPlatform" style="width:auto">${["x", "linkedin", "threads", "bluesky", "instagram", "tiktok", "youtube"].map((p) =>
         `<option value="${p}" ${p === (WS.platform || "x") ? "selected" : ""}>${{ x: "X", linkedin: "LinkedIn", threads: "Threads", bluesky: "Bluesky", instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube" }[p]}</option>`).join("")}</select>
         <input id="pHandle" class="grow" placeholder="@handle (Bluesky fetches for free)" value="${esc(WS.handle || "")}"></div>
-      <textarea id="pPaste" style="margin-top:10px" placeholder="Paste your profile page (Cmd+A, Cmd+C on it)"></textarea>
+      <div class="clipper"><a class="btn ghost sm clipDrag" href="#">kite clipper</a>
+        <span class="tiny dim grow">Collect your posts from any site. Drag it to your bookmarks bar, open your profile and click it.</span>
+        <button class="btn quiet sm" id="clipHow">How to install</button></div>
+      <textarea id="pPaste" style="margin-top:10px" placeholder="Paste your profile page (Cmd+A, Cmd+C on it) or what the kite clipper copied"></textarea>
       <div class="row" style="margin-top:8px"><button class="btn ghost sm" id="pAttach">Add files</button><input type="file" id="pFiles" multiple accept="image/*,.js,.json,.csv,.txt,.md" hidden>
         <span class="tiny dim grow" id="pFileList"></span><button class="btn sm" id="pRead">Read profile</button></div>
       <p class="tiny dim" id="pStatus"></p>
@@ -937,6 +948,19 @@ async function loadSettings() {
     const r = await api("/api/settings/test", { part }).catch((e) => ({ ok: false, message: e.message }));
     out.textContent = `${r.ok ? "✓" : "✕"} ${r.message}`; refreshHealth();
   }));
+  armClipLinks(el);
+  $("#clipHow").onclick = () => showClipperGuide();
+  $("#pPaste").addEventListener("input", () => {
+    const v = $("#pPaste").value.trim();
+    if (!v.startsWith('{"kite_clip"')) return;
+    try {
+      const c = JSON.parse(v);
+      if (c.platform && $(`#pPlatform option[value="${c.platform}"]`)) $("#pPlatform").value = c.platform;
+      $("#pStatus").textContent = c.page === "feed"
+        ? `These ${c.posts.length} posts come from several accounts, not your profile. Paste them in a thread to reply to them, or clip your own profile.`
+        : `${c.posts.length} posts from the clipper${c.url ? ` (${new URL(c.url).hostname})` : ""}. Hit Read profile.`;
+    } catch { $("#pStatus").textContent = "That clipper block looks cut off. Copy it again."; }
+  });
   $("#pAttach").onclick = () => $("#pFiles").click();
   $("#pFiles").onchange = async (e) => { profileFiles = profileFiles.concat(await readFiles(e.target.files)); $("#pFileList").textContent = profileFiles.map((f) => f.name).join(", "); };
   $("#pSave").onclick = async () => { await api("/api/workspace", { profile: $("#pText").value, platform: $("#pPlatform").value, handle: $("#pHandle").value }); toast("Profile saved"); };
@@ -951,7 +975,96 @@ async function loadSettings() {
     finally { const b = $("#pRead"); if (b) b.disabled = false; }
   };
   $("#dataPath").textContent = "data/";
+  if (pendingProfileClip) { $("#pPaste").value = pendingProfileClip; pendingProfileClip = null; $("#pPaste").dispatchEvent(new Event("input")); $("#pPaste").scrollIntoView({ block: "center" }); }
 }
 async function refreshHealth() { setHealth(await api("/api/today")); }
 
+// ---------------------------------------------------------------- kite clipper
+
+let clipCode = null, pendingProfileClip = null, pendingThreadText = null;
+async function armClipLinks(root = document) {
+  // The bookmarklet is web/clipper.js with this Kite's address baked in, so "Send to Kite" finds its way back.
+  try { clipCode ??= await (await fetch("/clipper.js")).text(); } catch { return; }
+  $$(".clipDrag", root).forEach((a) => {
+    a.href = `javascript:${encodeURIComponent(clipCode.replace("__KITE_ORIGIN__", location.origin))}`;
+    a.onclick = (e) => { e.preventDefault(); toast("Drag it to your bookmarks bar"); };
+  });
+}
+function openModal(inner, cls = "") {
+  const ov = document.createElement("div"); ov.className = "share-ov";
+  ov.innerHTML = `<div class="share-box ${cls}" role="dialog">${inner}</div>`;
+  document.body.append(ov);
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const close = () => { ov.remove(); document.removeEventListener("keydown", onKey); };
+  document.addEventListener("keydown", onKey);
+  ov.onclick = (e) => { if (e.target === ov || e.target.closest("[data-close]")) close(); };
+  return { el: ov, close };
+}
+function showClipperGuide() {
+  const m = openModal(`
+    <div class="guide-head"><b>kite clipper</b><span class="small dim">Collect posts from any site. No API, no login.</span></div>
+    <div class="g-demo" aria-hidden="true">
+      <div class="g-bar"><i></i><i></i><i></i><span>x.com/dev_brok</span></div>
+      <div class="g-marks"><span>Docs</span><span>Mail</span><span class="g-slot">kite clipper</span></div>
+      <div class="g-page"><span class="g-post"></span><span class="g-post"></span></div>
+      <span class="g-pill">kite clipper</span>
+    </div>
+    <ol class="g-steps">
+      <li><b>Show your bookmarks bar.</b> Press <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>B</kbd>, or Ctrl+Shift+B on Windows.</li>
+      <li><b>Drag this onto the bar:</b> <a class="btn sm clipDrag" href="#">kite clipper</a></li>
+      <li><b>Open the posts you want.</b> Your own profile teaches Kite your voice. A search or a thread gives you posts to reply to. Works on X, LinkedIn, Bluesky, Threads, Reddit and Mastodon.</li>
+      <li><b>Click the bookmark.</b> It scrolls and collects, then <b>Send to Kite</b> asks where the posts should go.</li>
+    </ol>
+    <details class="g-alt"><summary>Can't drag it?</summary>
+      <p class="small dim">Copy the code, add a new bookmark (right-click the bookmarks bar, then Add page), name it kite clipper and paste the code as its URL.</p>
+      <button class="btn ghost sm" id="gCopy">Copy the code</button></details>
+    <div class="row" style="margin-top:14px"><span class="grow"></span><button class="btn" data-close>Done</button></div>`, "guide");
+  armClipLinks(m.el);
+  $("#gCopy", m.el).onclick = async (e) => {
+    await armClipLinks(m.el);
+    try { await navigator.clipboard.writeText($(".clipDrag", m.el).href); e.target.textContent = "Copied"; } catch { toast("Couldn't copy; drag the button instead"); }
+  };
+}
+const linkify = (html) => html.replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60)}</a>`);
+function clipAsText(c) {
+  const host = c.url ? new URL(c.url).hostname.replace(/^www\./, "") : "the clipper";
+  return `Posts to reply to (from ${host}):\n\n` + c.posts.slice(0, 20).map((q, i) =>
+    `${i + 1}. ${q.author ? `@${q.author}` : "post"}${q.likes != null ? ` (${q.likes} likes, ${q.replies ?? 0} replies)` : ""}:\n${q.text}${q.cut ? " …" : ""}${q.url ? `\n${q.url}` : ""}`).join("\n\n");
+}
+async function showClipChooser(c) {
+  await workspace();
+  const list = await api("/api/threads").catch(() => []);
+  const host = c.url ? new URL(c.url).hostname.replace(/^www\./, "") : "the clipper";
+  const authors = new Set(c.posts.map((p) => p.author).filter(Boolean)).size;
+  const m = openModal(`
+    <div class="guide-head"><b>${c.posts.length} posts from ${esc(host)}</b><span class="small dim">${c.page === "feed" ? `By ${authors || "several"} accounts. ` : ""}Where should they go?</span></div>
+    <div class="choices">
+      ${c.page === "profile" ? `<button class="choice" data-c="profile"><b>Teach Kite my voice</b><span>Use these as your own posts in your profile</span></button>` : ""}
+      <button class="choice" data-c="new"><b>Reply to them</b><span>Start a thread: Kite drafts replies, Jev picks the best</span></button>
+      ${list.slice(0, 4).map((t) => `<button class="choice" data-c="thread" data-id="${t.id}"><b>Add to a thread</b><span>${esc(t.action)}</span></button>`).join("")}
+    </div>
+    <div class="row" style="margin-top:14px"><span class="grow"></span><button class="btn quiet" data-close>Cancel</button></div>`, "guide");
+  $$(".choice", m.el).forEach((b) => (b.onclick = async () => {
+    m.close();
+    if (b.dataset.c === "profile") { pendingProfileClip = JSON.stringify(c); return go("settings"); }
+    if (b.dataset.c === "thread") { pendingThreadText = { id: b.dataset.id, text: clipAsText(c) }; return go("threads", b.dataset.id); }
+    if (!WS.profile) { toast("Add your profile first"); return go("settings"); }
+    try {
+      const { thread } = await api("/api/thread", { action: `Reply to ${c.posts.length} posts from ${host}`, reason: "Collected with the kite clipper",
+        platform: c.platform || WS.platform, profile: WS.profile, goal: WS.goal, digest: WS.digest, context: clipAsText(c), run: null });
+      go("threads", thread);
+    } catch (e) { toast(e.message); }
+  }));
+}
+function takeIncomingClip() {
+  // The clipper's "Send to Kite" opens #clip=<posts>. Read it, then clear it from the address bar.
+  if (!location.hash.startsWith("#clip=")) return null;
+  let c = null;
+  try { c = JSON.parse(decodeURIComponent(location.hash.slice(6))); } catch { toast("Those posts didn't come through. Try Copy in the clipper."); }
+  history.replaceState(null, "", `${location.pathname}${location.search}#today`);
+  return c?.kite_clip && Array.isArray(c.posts) ? c : null;
+}
+
+const incoming = takeIncomingClip();
 route();
+if (incoming) showClipChooser(incoming);

@@ -1,5 +1,5 @@
-"""Where a profile comes from: pasted page text, screenshots, data exports, Bluesky's free API,
-or the X API when there's a token. No paid API is required."""
+"""Where a profile comes from: pasted page text, the Kite clipper (web/clipper.js), screenshots, data exports,
+Bluesky's free API, or the X API when there's a token. No paid API is required."""
 
 import base64
 import json
@@ -83,6 +83,47 @@ def parse_x_archive(text):
     return [p for _, p in posts[:200]]  # newest 200 original posts
 
 
+def _count(v):
+    return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 else None
+
+
+def parse_clip(text):
+    """The Kite clipper's block: {"kite_clip": 1, "platform": ..., "url": ..., "posts": [{text, likes, reposts, replies}]}.
+    Returns None for anything else, so ordinary pasted text is left alone."""
+    text = (text or "").strip()
+    if not text.startswith("{") or '"kite_clip"' not in text[:40]:
+        return None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    posts = []
+    for p in data.get("posts") or []:
+        body = str(p.get("text", "")).strip() if isinstance(p, dict) else ""
+        if body:
+            entry = post_entry(body[:3000] + (" …" if p.get("cut") else ""), _count(p.get("likes")), _count(p.get("reposts")), _count(p.get("replies")))
+            entry["author"] = str(p.get("author") or "").lstrip("@").lower()
+            link = str(p.get("url") or "")
+            entry["url"] = link if re.match(r"https?://[^\s]+$", link) else ""
+            posts.append(entry)
+    return {"platform": str(data.get("platform") or ""), "url": str(data.get("url") or ""), "page": str(data.get("page") or ""), "posts": posts[:200]}
+
+
+def own_posts(clip, handle):
+    """Keep only the account's own posts from a clip. Raises if the clip is someone else's feed."""
+    me = (handle or "").strip().lstrip("@").lower().split("@")[0]
+    authors = {p["author"] for p in clip["posts"] if p["author"]}
+    if me and authors:
+        mine = [p for p in clip["posts"] if p["author"] in (me, "")]
+        if mine:
+            return mine
+        raise RuntimeError(f"None of these posts are by @{me}. Open your own profile and run the clipper there.")
+    if clip["page"] == "feed" or len(authors) > 1:
+        raise RuntimeError("These posts come from several accounts (a search or a feed), so they can't teach Kite your voice. "
+                           "Run the clipper on your own profile, or paste these in a thread as posts to reply to.")
+    return clip["posts"]
+
+
 def read_files(files):
     """Split uploads into images (for the model to look at), structured posts, and raw text."""
     images, posts, raw = [], [], []
@@ -95,6 +136,8 @@ def read_files(files):
         text = base64.b64decode(f.get("data", "")).decode("utf-8", errors="replace")
         if "window.YTD.tweets" in text[:200]:
             posts.extend(parse_x_archive(text))
+        elif (clip := parse_clip(text)) is not None:
+            posts.extend(clip["posts"])
         else:
             raw.append(f"--- {name} ---\n{text}")
     return images, posts, "\n\n".join(raw)
