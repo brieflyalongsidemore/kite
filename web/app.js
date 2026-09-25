@@ -926,6 +926,10 @@ async function loadSettings() {
       <label class="field">Your profile (edit freely)</label><textarea id="pText" style="min-height:220px">${esc(WS.profile || "")}</textarea>
       <div class="row" style="margin-top:8px"><button class="btn sm" id="pSave">Save profile</button></div>
     </div></div>
+    <div class="set"><div><h3>Browser extension</h3><p class="hint">Lets threads find posts and set up replies in your own browser, where you're logged in. It never posts for you.</p></div><div>
+      <div class="row"><span class="health" id="extDot"></span><span class="small grow" id="extState">Checking…</span>
+        <button class="btn sm" id="extInstall">Install the extension</button></div>
+    </div></div>
     <div class="set"><div><h3>Extras</h3><p class="hint">Optional.</p></div><div>
       ${keyField("research", "brave_api_key", "Brave Search key", "Adds general web search to research (free tier at brave.com/search/api).")}
       ${keyField("sources", "x_bearer_token", "X API bearer token", "Only for fetching X profiles directly (X API reads are paid). Pasting works without it.")}
@@ -950,6 +954,16 @@ async function loadSettings() {
   }));
   armClipLinks(el);
   $("#clipHow").onclick = () => showClipperGuide();
+  $("#extInstall").onclick = () => showExtensionGuide();
+  const extCheck = async () => {
+    if (view !== "settings" || !$("#extState")) return;
+    const b = await api("/api/bridge/status").catch(() => ({}));
+    $("#extDot").classList.toggle("ok", !!b.connected);
+    $("#extState").textContent = b.connected ? "Connected. Threads can find posts and open replies in your browser." : "Not installed yet. It takes about a minute.";
+    $("#extInstall").textContent = b.connected ? "Reinstall" : "Install the extension";
+    setTimeout(extCheck, 4000);
+  };
+  extCheck();
   $("#pPaste").addEventListener("input", () => {
     const v = $("#pPaste").value.trim();
     if (!v.startsWith('{"kite_clip"')) return;
@@ -1015,17 +1029,49 @@ function showClipperGuide() {
       <li><b>Open the posts you want.</b> Your own profile teaches Kite your voice. A search or a thread gives you posts to reply to. Works on X, LinkedIn, Bluesky, Threads, Reddit and Mastodon.</li>
       <li><b>Click the bookmark.</b> It scrolls and collects, then <b>Send to Kite</b> asks where the posts should go.</li>
     </ol>
+    <p class="small dim" style="margin:12px 0 0">Want Kite to do this by itself, and set up your replies too? <button class="btn quiet sm" id="gExt">Add the browser extension</button></p>
     <details class="g-alt"><summary>Can't drag it?</summary>
       <p class="small dim">Copy the code, add a new bookmark (right-click the bookmarks bar, then Add page), name it kite clipper and paste the code as its URL.</p>
       <button class="btn ghost sm" id="gCopy">Copy the code</button></details>
     <div class="row" style="margin-top:14px"><span class="grow"></span><button class="btn" data-close>Done</button></div>`, "guide");
   armClipLinks(m.el);
+  $("#gExt", m.el).onclick = () => { m.close(); showExtensionGuide(); };
   $("#gCopy", m.el).onclick = async (e) => {
     await armClipLinks(m.el);
     try { await navigator.clipboard.writeText($(".clipDrag", m.el).href); e.target.textContent = "Copied"; } catch { toast("Couldn't copy; drag the button instead"); }
   };
 }
 const linkify = (html) => html.replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60)}</a>`);
+function showExtensionGuide() {
+  const m = openModal(`
+    <div class="guide-head"><b>Kite browser extension</b><span class="small dim">Lets threads find posts and set up replies in your own browser. It never posts for you.</span></div>
+    <div class="x-demo" aria-hidden="true">
+      <div class="x-top"><b>Extensions</b><span class="x-dev">Developer mode <i class="x-toggle"><i></i></i></span></div>
+      <div class="x-tools"><span class="x-load">Load unpacked</span><span>Pack extension</span><span>Update</span></div>
+      <div class="x-card"><span class="x-icon"></span><span><b>Kite</b> 0.1.0<br><span class="dim">Lets your local Kite collect posts…</span></span></div>
+    </div>
+    <ol class="g-steps">
+      <li><b>Download it</b> and double-click the zip to unzip it. <a class="btn sm" href="/kite-extension.zip" download>Download kite-extension.zip</a></li>
+      <li><b>Open chrome://extensions</b> in a new tab. Works in Chrome, Edge, Brave and Arc. <button class="btn quiet sm" id="xCopy">Copy address</button></li>
+      <li><b>Turn on Developer mode</b>, top right.</li>
+      <li><b>Click Load unpacked</b> and pick the <b>kite-extension</b> folder.</li>
+    </ol>
+    <div class="x-status"><span class="health" id="xDot"></span><span id="xState">Waiting for the extension…</span></div>
+    <p class="tiny dim" style="margin:10px 0 0">Browsers only let you add extensions from outside their store this way. Keep the folder where it is: Chrome loads it from there. If your browser ever asks about developer-mode extensions, keep Kite on.</p>
+    <div class="row" style="margin-top:14px"><span class="grow"></span><button class="btn" data-close>Done</button></div>`, "guide");
+  $("#xCopy", m.el).onclick = (e) => copy("chrome://extensions", e.target);
+  let was = null;
+  const check = async () => {
+    if (!document.body.contains(m.el)) return;
+    const b = await api("/api/bridge/status").catch(() => ({}));
+    $("#xDot", m.el).classList.toggle("ok", !!b.connected);
+    $("#xState", m.el).textContent = b.connected ? "Connected. You're all set: ask a thread to find posts to reply to." : "Waiting for the extension…";
+    if (b.connected && was === false) lift();
+    was = !!b.connected;
+    setTimeout(check, 2000);
+  };
+  check();
+}
 function clipAsText(c) {
   const host = c.url ? new URL(c.url).hostname.replace(/^www\./, "") : "the clipper";
   return `Posts to reply to (from ${host}):\n\n` + c.posts.slice(0, 20).map((q, i) =>

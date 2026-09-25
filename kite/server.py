@@ -1,14 +1,23 @@
 """HTTP: serves the web app from web/ and a small JSON API. Local only; there is no login."""
 
 import json
+import os
 import re
 import urllib.parse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-from . import agent, brain, config, jev, llm, store, threads
+from . import agent, brain, bridge, config, extension, jev, llm, store, threads
 
 WEB = config.ROOT / "web"
 MAX_BODY = 40 * 1024 * 1024
+# Kite has no login, so it only answers requests addressed to this machine. That blocks DNS rebinding;
+# the Origin and Content-Type checks below block other websites posting to it through your browser.
+ALLOWED_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"} | {
+    h.strip() for h in os.environ.get("KITE_ALLOWED_HOSTS", "").split(",") if h.strip()}
+
+
+def host_ok(value):
+    return (urllib.parse.urlsplit(f"//{value}").hostname or "") in ALLOWED_HOSTS
 
 
 def today():
@@ -88,13 +97,50 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
+    def guard(self, write=False, from_extension=False):
+        """True if the request may go ahead; otherwise answers 403 and returns False."""
+        host, origin = self.headers.get("Host", ""), self.headers.get("Origin")
+        why = None
+        if not host_ok(host):
+            why = "Kite only answers on localhost."
+        elif from_extension:
+            if self.headers.get("X-Kite-Bridge") != "1":
+                why = "Only the Kite browser extension can use this."
+            elif origin and not origin.startswith(("chrome-extension://", "moz-extension://")) and origin not in (f"http://{host}", f"https://{host}"):
+                why = "Only the Kite browser extension can use this."
+        elif write:
+            if origin and origin not in (f"http://{host}", f"https://{host}"):
+                why = "Requests from other websites aren't allowed."
+            elif "application/json" not in self.headers.get("Content-Type", ""):
+                why = "Send JSON."
+        if why:
+            self.send_json(403, {"error": why})
+            return False
+        return True
+
     # ---------------------------------------------------------------- GET
     def do_GET(self):
         path, _, query = self.path.partition("?")
         q = urllib.parse.parse_qs(query)
+        if not self.guard():
+            return None
+        if path == "/kite-extension.zip":
+            data = extension.zip_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", 'attachment; filename="kite-extension.zip"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return None
         if not path.startswith("/api/"):
             return super().do_GET()  # static files from web/ only
+        if path == "/api/bridge/next":
+            if not self.guard(from_extension=True):
+                return None
+            return self.send_json(200, bridge.next_task(int(q.get("wait", ["20"])[0] or 20)))
         routes = {
+            "/api/bridge/status": bridge.status,
             "/api/today": today,
             "/api/settings": config.public_settings,
             "/api/workspace": store.workspace,
@@ -120,6 +166,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     # ---------------------------------------------------------------- POST
     def do_POST(self):
+        if not self.guard(write=True, from_extension=self.path.startswith("/api/bridge/")):
+            return None
         length = int(self.headers.get("Content-Length", "0"))
         if length > MAX_BODY:
             return self.send_json(413, {"error": "Upload too large (40 MB max). For an X archive, upload just data/tweets.js."})
@@ -134,6 +182,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def post(self, path, body):
         # No model needed
+        if path == "/api/bridge/done":
+            return bridge.finish(body)
         if path == "/api/settings":
             return config.save_settings(body)
         if path == "/api/settings/test":

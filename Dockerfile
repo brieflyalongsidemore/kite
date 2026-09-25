@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY kite ./kite
 COPY web ./web
+COPY extension ./extension
 
 RUN useradd --create-home kite && mkdir -p /data && chown kite /data
 USER kite

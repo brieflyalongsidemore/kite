@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Kite",
+  "version": "0.1.0",
+  "description": "Lets your local Kite collect posts and set up replies in your own browser. It never posts for you.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "alarms",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://bsky.app/*",
+    "https://www.linkedin.com/*",
+    "https://www.threads.net/*",
+    "https://www.threads.com/*",
+    "https://www.reddit.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Kite",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

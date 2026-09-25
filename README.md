@@ -40,6 +40,7 @@ Today
 
    Research is optional and free. The writer can use Reddit, Hacker News, Bluesky, Mastodon, Google News and Google Trends, plus Brave web search if you add a key.
 3. **It helps you do the work.** Every action has **Work on it**, which opens a thread. The writer turns the action into a checklist and drafts replies, posts or bios, and Jev picks the best ones. You post them yourself.
+   With the **browser extension** (below), a thread can do the legwork itself: search X, Bluesky, LinkedIn, Threads or Reddit in your own browser, collect posts worth replying to, and open each one with Jev's chosen reply typed into the reply box. It never posts. You read it and press Reply.
 4. **It remembers.** The brain is a folder of Markdown notes linked like an Obsidian vault. Kite records every plan, decision, checklist tick and post in it, and the writer maintains it through Anthropic's memory tool. **Reflect** updates your *Direction*: where you're really heading, what you've done versus planned, and what to focus on next. The Brain tab shows it as a graph.
 
 ## Quick start
@@ -59,6 +60,21 @@ docker compose up -d        # → http://localhost:8788, data in ./data
 ```
 
 You can also set everything in the app under **Settings**. Settings saved there are stored in `data/settings.json` (readable only by you) and override `.env`.
+
+## Browser extension (optional)
+
+Let a thread do the legwork: ask it to find posts worth replying to, and Kite searches X, Bluesky, LinkedIn, Threads or Reddit **in your own browser**, where you're already logged in. It collects the posts, drafts replies, lets Jev pick the best, and opens each post with the reply typed into the reply box. **It never posts: you read it and press Reply.** No API and no extra login.
+
+Install it in about a minute (Chrome, Edge, Brave or Arc):
+
+1. Download **[kite-extension.zip](https://open-kite.vercel.app/kite-extension.zip)**, or get it from your own Kite at `http://localhost:8788/kite-extension.zip` (Settings › Browser extension › Install). Double-click it to unzip.
+2. Open `chrome://extensions` and turn on **Developer mode**, top right.
+3. Click **Load unpacked** and pick the `kite-extension` folder. (From a clone of this repo you can pick `extension/` instead.)
+4. Kite's Settings shows a live dot once it's connected. If Kite isn't on `http://localhost:8788`, set its address in the extension's popup.
+
+Browsers only allow extensions from outside their store to be added this way, so keep the folder where it is.
+
+Without the extension, the **kite clipper** bookmarklet (Settings › You, or **Clip posts** in a thread) collects posts from any page when you click it.
 
 ## Providers
 

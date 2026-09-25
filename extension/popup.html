@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; width: 280px; padding: 16px; background: #0a0a0a; color: #f4f4f4; font: 13px/1.45 -apple-system, system-ui, sans-serif; }
+  b { font-size: 15px; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #f4f4f4; }
+  .dot.on { background: #f4f4f4; }
+  label { display: block; color: #9a9a9a; font-size: 12px; margin: 12px 0 4px; }
+  input { width: 100%; box-sizing: border-box; background: #141414; color: #f4f4f4; border: 1px solid #333; border-radius: 8px; padding: 7px 9px; font: inherit; }
+  p { color: #9a9a9a; font-size: 12px; margin: 10px 0 0; }
+</style>
+<b>kite</b>
+<div class="row"><span class="dot" id="dot"></span><span id="state">Checking…</span></div>
+<label for="kite">Your Kite</label>
+<input id="kite" placeholder="http://localhost:8788">
+<p>Kite uses this browser to collect posts and to type replies into reply boxes. It never posts for you.</p>
+<script src="popup.js"></script>

@@ -272,3 +272,25 @@ kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--soft); border-
 .choice:hover { border-color: var(--fg); }
 .choice span { font-size: 13px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Extension install guide: a tiny chrome://extensions */
+.x-demo { border: 1px solid var(--soft); border-radius: 12px; background: var(--wash); padding: 12px; font-size: 12px; display: grid; gap: 10px; }
+.x-top { display: flex; justify-content: space-between; align-items: center; }
+.x-dev { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); }
+.x-toggle { width: 28px; height: 16px; border-radius: 999px; background: var(--soft); position: relative; display: inline-block; animation: x-toggle 6s ease-in-out infinite; }
+.x-toggle i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); animation: x-knob 6s ease-in-out infinite; }
+.x-tools { display: flex; gap: 8px; opacity: .25; animation: x-tools 6s ease-in-out infinite; }
+.x-tools span { border: 1px solid var(--soft); border-radius: 6px; padding: 3px 8px; }
+.x-load { animation: x-load 6s ease-in-out infinite; }
+.x-card { display: flex; gap: 10px; align-items: center; border: 1px solid var(--soft); border-radius: 10px; padding: 10px; background: var(--bg); line-height: 1.4; opacity: 0; animation: x-card 6s ease-in-out infinite; }
+.x-icon { width: 28px; height: 28px; border-radius: 7px; background: var(--fg); flex: none; position: relative; }
+.x-icon::after { content: ""; position: absolute; inset: 5px 8px; background: var(--bg); clip-path: polygon(50% 0, 100% 38%, 50% 100%, 0 38%); }
+@keyframes x-toggle { 0%, 15% { background: var(--soft); } 22%, 100% { background: var(--fg); } }
+@keyframes x-knob { 0%, 15% { left: 2px; } 22%, 100% { left: 14px; } }
+@keyframes x-tools { 0%, 22% { opacity: .25; } 28%, 100% { opacity: 1; } }
+@keyframes x-load { 0%, 38% { outline: 0 solid transparent; } 42%, 55% { outline: 2px solid var(--fg); outline-offset: 1px; } 60%, 100% { outline: 0 solid transparent; } }
+@keyframes x-card { 0%, 58% { opacity: 0; transform: translateY(6px); } 66%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .x-toggle, .x-toggle i, .x-tools, .x-load, .x-card { animation: none; }
+  .x-toggle { background: var(--fg); } .x-toggle i { left: 14px; } .x-tools { opacity: 1; } .x-card { opacity: 1; }
+}
+.x-status { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 10px 12px; border: 1px solid var(--soft); border-radius: 10px; font-size: 13px; }
