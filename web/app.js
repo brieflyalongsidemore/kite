@@ -106,27 +106,26 @@ async function loadToday() {
   }
   const open = t.actions.filter((a) => a.status !== "done" && a.status !== "skipped");
   const doneCount = t.actions.filter((a) => a.status === "done").length;
+  const threadFor = Object.fromEntries(t.threads.map((th) => [th.action, th.id]));
+  const busy = t.threads.filter((th) => th.busy).length;
+  // One thing at a time: the next action up front, the rest folded away.
   body.innerHTML = `
-    <div class="block"><h2><span class="grow">Focus${t.actions.length ? ` · ${doneCount}/${t.actions.length} done` : ""}</span>
-      <button class="btn quiet sm" id="seePlan">Full plan →</button></h2>
-      <div class="focus" id="focus"></div></div>
+    <div class="block"><h2><span class="grow">${open.length ? "Next up" : "Focus"}</span><span class="tiny dim">${doneCount}/${t.actions.length} done</span></h2>
+      <div class="focus" id="focus"></div>
+      ${open.length > 1 ? `<details class="later"><summary>${open.length - 1} more after this</summary><div class="focus" id="later"></div></details>` : ""}</div>
     <div class="block" id="deckBlock"><h2><span class="grow">Ready to post</span><span class="pager" id="pager"></span></h2><div class="deck" id="deck"></div></div>
-    <div class="block" id="inProgress"></div>
-    <div class="block row"><button class="btn ghost" id="newPlan">New plan</button><span class="tiny dim">Current: ${esc(t.run.goal)} · ${new Date(t.run.created * 1000).toLocaleDateString([], { month: "short", day: "numeric" })}</span></div>`;
-  $("#seePlan").onclick = () => go("plan", t.run.id);
+    <div class="block row small dim">
+      <a href="#plan/${t.run.id}">Full plan →</a>
+      ${t.threads.length ? `<a href="#threads">${t.threads.length} thread${t.threads.length > 1 ? "s" : ""}${busy ? `, ${busy} working` : ""} →</a>` : ""}
+      <span class="grow"></span><button class="btn quiet sm" id="newPlan">New plan</button></div>`;
   $("#newPlan").onclick = () => { go("plan"); setTimeout(() => $("#goal").focus(), 50); };
-  const focus = $("#focus");
-  const ordered = [...open.slice(0, 3), ...t.actions.filter((a) => a.status === "done" || a.status === "skipped")];
-  ordered.forEach((a) => focus.append(actionRow(a, t.run.id, () => loadToday())));
-  if (!open.length) focus.insertAdjacentHTML("beforeend", `<div class="alldone">All done. Nice work. <button class="btn quiet sm" id="again">Make the next plan</button></div>`);
+  const row = (a) => actionRow(a, t.run.id, () => loadToday(), { compact: true, thread: threadFor[a.text] });
+  if (open.length) $("#focus").append(row(open[0]));
+  else $("#focus").innerHTML = `<div class="alldone">All done. Nice work. <button class="btn quiet sm" id="again">Make the next plan</button></div>`;
+  open.slice(1).forEach((a) => $("#later").append(row(a)));
   $("#again")?.addEventListener("click", () => go("plan"));
   deckIndex = Math.min(deckIndex, Math.max(0, t.posts.length - 1));
   renderDeck(t.posts, t.run.id);
-  if (t.threads.length) {
-    $("#inProgress").innerHTML = `<h2>Threads</h2><div class="list">${t.threads.slice(0, 4).map((th) =>
-      `<button data-th="${th.id}">${esc(th.action)}<span class="sub">${th.total ? `${th.done}/${th.total} steps` : "just started"}${th.busy ? " · working" : ""}</span></button>`).join("")}</div>`;
-    $$("#inProgress [data-th]").forEach((b) => (b.onclick = () => go("threads", b.dataset.th)));
-  }
 }
 
 function renderOnboarding(body, t) {
@@ -154,15 +153,14 @@ function renderOnboarding(body, t) {
   });
 }
 
-function actionRow(a, runId, after) {
+function actionRow(a, runId, after, opts = {}) {
   const el = document.createElement("div");
-  el.className = `act ${a.status === "done" ? "done" : ""} ${a.status === "skipped" ? "skipped" : ""}`;
-  const s = a.scores || {};
+  el.className = `act ${a.status === "done" ? "done" : ""} ${a.status === "skipped" ? "skipped" : ""} ${opts.compact ? "compact" : ""}`;
   el.innerHTML = `<button class="check" aria-label="Mark done">${CHECK}</button>
-    <div><div class="what"></div>${a.reason ? `<div class="why">${esc(a.reason)}</div>` : ""}
-      <div class="meta">Jev priority ${Math.round(a.priority || 0)}${a.first != null ? ` · first-move odds ${pct(a.first)}` : ""}${s.effort != null ? ` · effort ${s.effort.toFixed(1)}/4` : ""}${a.risk != null ? ` · risk ${pct(a.risk)}` : ""}</div></div>
+    <div><div class="what" title="${opts.compact ? "Show all" : ""}"></div>${a.reason && !opts.compact ? `<div class="why">${esc(a.reason)}</div>` : ""}
+      ${opts.compact ? "" : `<div class="meta">Jev ${Math.round(a.priority || 0)}${a.first >= 0.2 ? ` · do first ${pct(a.first)}` : ""}</div>`}</div>
     <div class="side">${a.status === "in progress" ? '<span class="chip">in progress</span>' : ""}
-      <button class="btn ghost sm work">Work on it →</button>
+      <button class="btn ghost sm work">${opts.thread ? "Continue →" : "Work on it →"}</button>
       <button class="btn quiet sm skip">${a.status === "skipped" ? "Undo skip" : "Skip"}</button></div>`;
   $(".what", el).textContent = a.text;
   const set = async (status) => {
@@ -172,7 +170,8 @@ function actionRow(a, runId, after) {
   };
   $(".check", el).onclick = () => set(a.status === "done" ? "todo" : "done");
   $(".skip", el).onclick = () => set(a.status === "skipped" ? "todo" : "skipped");
-  $(".work", el).onclick = () => newThread(a, runId);
+  $(".work", el).onclick = () => (opts.thread ? go("threads", opts.thread) : newThread(a, runId));
+  if (opts.compact) $(".what", el).onclick = (e) => e.currentTarget.classList.toggle("full");
   return el;
 }
 
@@ -182,9 +181,10 @@ function postCard(p, runId, onDone) {
   const s = p.scores || {};
   el.innerHTML = `${p.kind ? `<div class="kind">${esc(p.kind)}</div>` : ""}<div class="text"></div>
     ${p.reason ? `<div class="why">${esc(p.reason)}</div>` : ""}
-    <div class="bars">${Object.entries(DIMS).map(([k, l]) => `<div>${l}<span><b style="width:${((s[k] || 0) / 4) * 100}%"></b></span></div>`).join("")}</div>
+    <details class="scores"><summary>Scores</summary><div class="bars">${Object.entries(DIMS).map(([k, l]) => `<div>${l}<span><b style="width:${((s[k] || 0) / 4) * 100}%"></b></span></div>`).join("")}</div>
+      <p class="tiny dim">${[p.h2h != null ? `head-to-head ${pct(p.h2h)}` : "", `breakout ${pct(p.breakout)}`, `bait ${pct(p.bait)}`, p.rehash ? `rehash ${pct(p.rehash)}` : ""].filter(Boolean).join(" · ")}</p></details>
     <div class="foot"><span class="score">${Math.round(p.viral)}<small>Jev</small></span>
-      <span class="tiny dim grow">${[p.h2h != null ? `head-to-head ${pct(p.h2h)}` : "", `breakout ${pct(p.breakout)}`, `bait ${pct(p.bait)}`, p.rehash ? `rehash ${pct(p.rehash)}` : ""].filter(Boolean).join(" · ")}</span>
+      <span class="tiny dim grow">${[p.h2h != null ? `wins ${pct(p.h2h)} head-to-head` : "", p.bait > 0.2 ? "reads as bait" : "", p.rehash > 0.3 ? "close to an old post" : ""].filter(Boolean).join(" · ")}</span>
       <button class="btn ghost sm cp">Copy</button><button class="btn sm posted">I posted it</button><button class="btn quiet sm pass">Skip</button></div>`;
   $(".text", el).textContent = p.text;
   $(".cp", el).onclick = (e) => copy(p.text, e.target);
@@ -266,6 +266,13 @@ async function openRun(id) {
   }
 }
 
+// The steps worth showing by default; the full log (thinking, every score) is one click away.
+const MILESTONES = new Set(["tool", "research", "read", "ask", "final", "error"]);
+function stepText(e) {
+  const t = String(e.text).split("\n")[0];
+  return ({ research: `Searching ${t}`, read: `Reading ${t.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60)}`, ask: `Asking Jev: ${t}`, final: "Plan ready" })[e.kind] ?? t;
+}
+let fullLog = false;
 function logText(e) {
   const first = (s) => String(s).split("\n")[0].slice(0, 120);
   return ({ tool: `→ ${e.text}`, score: `   ${String(Math.round(e.viral)).padStart(3)}  ${first(e.text)}`, action: `   P${String(Math.round(e.priority)).padStart(3)}  ${first(e.text)}`,
@@ -283,6 +290,7 @@ async function renderRun(v, log) {
   const final = v.final || {};
   const plan = final.plan || (running ? v.actions : []);
   const posts = final.posts || (running ? v.drafts.slice(0, 3) : []);
+  const steps = log.filter((e) => MILESTONES.has(e.kind));
   el.innerHTML = `
     <h1>${esc(v.meta?.goal || "Plan")}</h1>
     <div class="row small dim">${running ? '<span class="working"><i></i><i></i><i></i></span> Working on it' : v.status === "error" ? "Stopped" : "Done"}
@@ -290,15 +298,19 @@ async function renderRun(v, log) {
       · Jev ${v.cost.jevCalls} calls${(v.cost.llm ?? v.cost.claude) ? ` · ≈ $${((v.cost.llm ?? v.cost.claude) + v.cost.jev).toFixed(2)}` : ""}
       <span class="grow"></span>${running ? "" : `<button class="btn quiet sm" id="delRun">Remove</button>`}</div>
     ${v.error ? `<p class="small" style="margin-top:10px"><b>${esc(v.error)}</b></p>` : ""}
-    <details class="log block" ${running || wasOpen ? "open" : ""}><summary>${running ? "What Kite is doing" : "How Kite got here"} (${log.length} steps)</summary><div class="logbox"></div></details>
+    <details class="log block" ${wasOpen ? "open" : ""}><summary>${running ? esc(steps.length ? stepText(steps[steps.length - 1]) : "Getting started") : "How Kite got here"}
+      <span class="dim"> · ${steps.length} step${steps.length === 1 ? "" : "s"}</span></summary>
+      <div class="logbox ${fullLog ? "" : "steps"}"></div><button class="btn quiet sm" id="fullLog">${fullLog ? "Show fewer details" : "Show full log"}</button></details>
     ${v.mix?.length ? `<div class="block"><h2>Mix</h2><div class="mixbar">${v.mix.map((m) => `<i style="width:${m.share * 100}%" title="${esc(m.kind)}"></i>`).join("")}</div>
-      <div class="mixlegend">${v.mix.map((m) => `<div><b>${pct(m.share)}</b><span>${esc(m.kind)}</span></div>`).join("")}</div></div>` : ""}
-    ${v.ideas?.length ? `<div class="block"><h2>Ideas</h2><div class="ideas">${v.ideas.slice(0, 8).map((i) => `<div class="idea"><span class="p">${Math.round(i.priority)}</span>
-      <div>${esc(i.text)}${i.basis ? `<div class="b">${esc(i.basis)}</div>` : ""}</div></div>`).join("")}</div></div>` : ""}
+      <div class="mixlegend">${v.mix.slice(0, 5).map((m) => `<div><b>${pct(m.share)}</b><span>${esc(m.kind)}</span></div>`).join("")}</div></div>` : ""}
+    ${v.ideas?.length ? `<div class="block"><h2>Ideas</h2><div class="ideas">${v.ideas.slice(0, 5).map((i) => `<div class="idea" title="${esc(i.basis || "")}"><span class="p">${Math.round(i.priority)}</span>
+      <div>${esc(i.text)}</div></div>`).join("")}</div></div>` : ""}
     ${plan.length ? `<div class="block"><h2>${final.plan ? "Plan" : "Actions so far"}</h2><div class="focus" id="planActs"></div></div>` : ""}
     ${posts.length ? `<div class="block"><h2>${final.posts ? "Posts" : "Best drafts so far"}</h2><div class="stack" id="planPosts"></div></div>` : ""}`;
   const box = $(".logbox", el);
-  box.innerHTML = log.map((e) => `<div class="${e.kind}">${esc(logText(e))}</div>`).join("");
+  box.innerHTML = fullLog ? log.map((e) => `<div class="${e.kind}">${esc(logText(e))}</div>`).join("")
+    : steps.map((e) => `<div class="${e.kind}">${esc(stepText(e))}</div>`).join("");
+  $("#fullLog").onclick = () => { fullLog = !fullLog; renderRun(v, log); };
   if (atBottom) box.scrollTop = box.scrollHeight;
   $("#delRun")?.addEventListener("click", async () => {
     if (!confirm("Remove this plan from the list? It's moved to data/runs/trash, not erased.")) return;
@@ -363,10 +375,26 @@ function renderThread(th) {
     renderThread(t);
   }));
   const chat = $("#chat");
+  // Group each reply (everything between two user messages) and show only its last round of Jev cards.
+  const turns = [];
   for (const m of th.display) {
-    if (m.role === "user" && !m.hidden) chat.insertAdjacentHTML("beforeend", `<div class="msg user"><div class="who">You</div><div class="body">${esc(m.text)}${m.images ? `\n[${m.images} screenshot${m.images > 1 ? "s" : ""}]` : ""}</div></div>`);
-    else if (m.role === "claude") chat.insertAdjacentHTML("beforeend", `<div class="msg"><div class="who">Kite</div><div class="body md">${md(m.text)}</div></div>`);
-    else if (m.role === "cards") chat.append(cardsEl(m, th));
+    if (m.role === "user") turns.push({ user: m, items: [] });
+    else (turns[turns.length - 1] || turns[turns.push({ items: [] }) - 1]).items.push(m);
+  }
+  for (const turn of turns) {
+    const m = turn.user;
+    if (m && !m.hidden) chat.insertAdjacentHTML("beforeend", `<div class="msg user"><div class="who">You</div><div class="body">${esc(m.text)}${m.images ? `\n[${m.images} screenshot${m.images > 1 ? "s" : ""}]` : ""}</div></div>`);
+    const cards = turn.items.filter((x) => x.role === "cards"), last = cards[cards.length - 1];
+    if (cards.length > 1) {
+      const d = document.createElement("details"); d.className = "rounds";
+      d.innerHTML = `<summary>${cards.length - 1} earlier round${cards.length > 2 ? "s" : ""} of drafts</summary>`;
+      cards.slice(0, -1).forEach((c) => d.append(cardsEl(c, th)));
+      chat.append(d);
+    }
+    for (const x of turn.items) {
+      if (x.role === "claude") chat.insertAdjacentHTML("beforeend", `<div class="msg"><div class="who">Kite</div><div class="body md">${md(x.text)}</div></div>`);
+      else if (x === last) chat.append(cardsEl(x, th));
+    }
   }
   $("#tAttach").onclick = () => $("#tFile").click();
   $("#tFile").onchange = async (e) => { threadFiles = threadFiles.concat(await readFiles(e.target.files)); $("#tStatus").textContent = `${threadFiles.length} attached`; };
@@ -384,6 +412,7 @@ function cardsEl(m, th) {
   items.forEach((it, i) => {
     const o = document.createElement("div");
     o.className = `opt ${i === 0 ? "best" : ""}`;
+    o.hidden = i >= 2;
     let n, meta = "";
     if (m.kind === "replies") { n = Math.round(it.score); meta = `author engages ${pct(it.author)} · profile visit ${pct(it.follow)} · spam ${pct(it.spam)}`; }
     else if (m.kind === "posts") { n = Math.round(it.viral); meta = Object.entries(DIMS).map(([k, l]) => `${l} ${(it.scores?.[k] ?? 0).toFixed(1)}`).join(" · "); }
@@ -398,6 +427,11 @@ function cardsEl(m, th) {
     });
     $(".opts", el).append(o);
   });
+  if (items.length > 2) {
+    const more = document.createElement("button"); more.className = "btn quiet sm"; more.textContent = `Show ${items.length - 2} more`;
+    more.onclick = () => { $$(".opt", el).forEach((o) => (o.hidden = false)); more.remove(); };
+    el.append(more);
+  }
   return el;
 }
 
