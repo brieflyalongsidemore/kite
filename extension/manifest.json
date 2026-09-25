@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kite",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lets your local Kite collect posts and set up replies in your own browser. It never posts for you.",
   "permissions": [
     "tabs",
